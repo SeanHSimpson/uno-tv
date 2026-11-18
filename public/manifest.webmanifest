@@ -1,0 +1,10 @@
+{
+  "name": "OhNo!",
+  "short_name": "OhNo!",
+  "description": "A cozy card game for one TV and a room full of phones.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1f3a33",
+  "theme_color": "#1f3a33",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
