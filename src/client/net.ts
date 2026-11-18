@@ -146,6 +146,22 @@ export function savedName(): string {
   }
 }
 
+export function savedAvatar(): string | null {
+  try {
+    return localStorage.getItem("ohno.avatar");
+  } catch {
+    return null;
+  }
+}
+
+export function saveAvatar(a: string) {
+  try {
+    localStorage.setItem("ohno.avatar", a);
+  } catch {
+    /* private mode */
+  }
+}
+
 export function saveName(name: string) {
   try {
     localStorage.setItem("ohno.name", name);

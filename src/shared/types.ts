@@ -52,6 +52,8 @@ export interface PlayerState {
   hue: number;
   /** Computer player, run by the room itself. */
   bot?: boolean;
+  /** Picture the player chose (one of AVATARS). */
+  avatar?: string;
 }
 
 export interface GameState {
@@ -104,6 +106,7 @@ export interface PublicPlayer {
   lastPlayed: Card | null;
   hue: number;
   bot: boolean;
+  avatar: string | null;
 }
 
 export interface PublicState {
@@ -154,7 +157,8 @@ export type ClientMessage =
   | { t: "nextRound" }
   | { t: "lobby" }
   | { t: "rename"; name: string }
-  | { t: "addBot" };
+  | { t: "addBot" }
+  | { t: "avatar"; avatar: string };
 
 export type ServerMessage =
   | { t: "state"; state: PublicState; me: PrivateState | null; events: GameEvent[] }
@@ -162,5 +166,12 @@ export type ServerMessage =
   | { t: "fatal"; message: string };
 
 export const MAX_PLAYERS = 10;
+
+/** Pictures players can pick for their seat. */
+export const AVATARS = [
+  "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐸", "🐵",
+  "🐰", "🐱", "🐶", "🦉", "🐧", "🐢", "🦄", "🐙",
+  "🦔", "🐝", "🐞", "🦋", "🐳", "🦖", "🌻", "🍄",
+] as const;
 export const HAND_SIZE = 7;
 export const MAX_NAME = 14;

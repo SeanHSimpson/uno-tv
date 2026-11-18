@@ -1,10 +1,11 @@
 import "./styles.css";
 import { audio } from "./audio";
 import { cardEl, installCardDefs } from "./cards";
-import { createRoom, roomExists, saveName, savedName } from "./net";
+import { AVATARS } from "../shared/types";
+import { createRoom, roomExists, saveAvatar, savedAvatar, saveName, savedName } from "./net";
 import { mountPhone } from "./phone";
 import { mountTv } from "./tv";
-import { $, esc, toast } from "./ui";
+import { $, avatarPicker, esc, toast } from "./ui";
 
 // Routes (query-string based so it works as a plain static site):
 //   /                 home: host or join
@@ -28,6 +29,7 @@ else home(join || play);
 function home(prefill: string) {
   document.body.className = "mode-home";
   const joining = prefill.length === 4;
+  let pickedAvatar = savedAvatar() ?? AVATARS[Math.floor(Math.random() * AVATARS.length)]!;
   root.innerHTML = `
   <div class="home">
     <div class="home-hero">
@@ -39,6 +41,8 @@ function home(prefill: string) {
       <form class="panel" id="join-form" autocomplete="off">
         <h2>Join a game</h2>
         <label>Your name<input id="name" maxlength="14" required placeholder="e.g. Grandma Jo" value="${esc(savedName())}" autocapitalize="words" enterkeyhint="next"></label>
+        <div class="pick-label">Your picture</div>
+        ${avatarPicker(pickedAvatar)}
         <label>Room code<input id="code" maxlength="4" required placeholder="ABCD" value="${esc(prefill)}" autocapitalize="characters" inputmode="text" enterkeyhint="go"></label>
         <button class="btn btn-primary btn-xl wide" type="submit">Pull up a chair</button>
       </form>
@@ -69,6 +73,16 @@ function home(prefill: string) {
   if (joining && savedName()) ($("#name") as HTMLInputElement).focus();
   else ($(joining ? "#name" : "#name") as HTMLInputElement).focus({ preventScroll: true });
 
+  root.querySelector(".avatar-picker")!.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-avatar]");
+    if (!btn) return;
+    pickedAvatar = btn.dataset.avatar!;
+    root.querySelectorAll(".avatar-choice").forEach((b) => {
+      b.classList.toggle("on", b === btn);
+      b.setAttribute("aria-checked", String(b === btn));
+    });
+  });
+
   const codeInput = $("#code") as HTMLInputElement;
   codeInput.addEventListener("input", () => (codeInput.value = norm(codeInput.value)));
 
@@ -81,6 +95,7 @@ function home(prefill: string) {
     if (code.length !== 4) return toast("Room codes are 4 letters — check the TV.");
     if (!(await roomExists(code).catch(() => false))) return toast("Can't find that room. Check the code on the TV.", "error");
     saveName(name);
+    saveAvatar(pickedAvatar);
     history.replaceState(null, "", `/?play=${code}`);
     mountPhone(root, code, name);
   });
