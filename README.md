@@ -11,6 +11,7 @@ Cozy party games for one TV and a room full of phones. **The TV is the table; ev
 | --- | --- | --- |
 | 🃏 **OhNo!** | 2–10 | Match colors or symbols and empty your hand first. |
 | ♠️ **Contract Rummy** | 2–8 | Seven rounds, seven contracts. Build sets and runs, go out first, keep your score low. |
+| 🧨 **Fizzle!** | 2–8 | Pass the lit firecracker before it goes 💥. Last one standing wins. |
 | 🤫 **Hush** (co-op) | 2–6 | Play every number in rising order, together, without saying a word. |
 
 Runs entirely on Cloudflare: one Worker serves the frontend, and every room is a Durable Object that owns the room, the running game and all of its WebSockets.
@@ -113,6 +114,28 @@ The traditional seven-contract rummy (the public-domain family that games like P
 - **Host settings:** Classic (7 contracts) or Short (4: 2 sets → set + run → 2 runs → 3 runs), and "May I?" on or off.
 - **Bots** collect toward the contract, only take discards that complete something, lay down as soon as they can, add to groups, and sometimes shout "May I?".
 
+## Fizzle!
+
+An original hot-potato card game for 2–8 players.
+
+- The deck hides **firecrackers**, one fewer than the number of players.
+- **Your turn:** play any action cards you like, then **draw** one card.
+- **Draw a firecracker** and it's lit in front of you with a two-turn fuse, shown as ●● on the TV. You get **one more turn** to deal with it: 🤾 **Toss** it to someone (they get a fresh fuse), or 💧 **douse it with Water** (it's shuffled back into the deck). If you don't, it goes **💥** at the start of your following turn and you're out.
+- **Last one standing wins.**
+
+| Card | What it does |
+| --- | --- |
+| 💧 Water | Douse your lit firecracker; it goes back into the deck at random |
+| 🤾 Toss | Throw your lit firecracker to another player, with a fresh fuse |
+| 👀 Peek | Secretly see the top 3 cards (shown on your phone until the deck changes) |
+| 🔀 Shuffle | Shuffle the deck |
+| 💤 Nap | End your turn without drawing |
+| 🎣 Fish | Draw from the bottom of the deck instead of the top |
+
+- Everyone starts with **1 Water + 4 random cards**.
+- If you join mid-game, you play from the next game.
+- **Bots** douse or toss when they have to, peek sometimes, and dodge a known firecracker with Nap, Fish or Shuffle. When they toss, they aim at whoever has the fewest cards.
+
 ## Hush
 
 A cooperative game for 2–6 players, played in silence.
@@ -142,6 +165,7 @@ src/
       ohno/                OhNo! rules (engine.ts), bot (bot.ts), types, module.ts adapter
       hush/                Hush rules + bot timing (engine.ts), module.ts adapter
       rummy/               Contract Rummy: cards & melds + contract finder (cards.ts), rules (engine.ts), bot, module
+      fizzle/              Fizzle! rules (engine.ts), bot + module
   server/
     index.ts               Worker entry + `Room` Durable Object (sockets, storage, bot timers)
   client/

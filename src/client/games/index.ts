@@ -1,6 +1,8 @@
 // The screens for each game. Add a new game's TV + phone views here.
 
 import type { GameId } from "../../shared/games/types";
+import { fizzlePhone } from "./fizzle/phone";
+import { fizzleTv } from "./fizzle/tv";
 import { hushPhone } from "./hush/phone";
 import { hushTv } from "./hush/tv";
 import { ohnoPhone } from "./ohno/phone";
@@ -13,4 +15,5 @@ export const SCREENS: Record<GameId, GameScreens> = {
   ohno: { tv: ohnoTv, phone: ohnoPhone },
   hush: { tv: hushTv, phone: hushPhone },
   rummy: { tv: rummyTv, phone: rummyPhone },
+  fizzle: { tv: fizzleTv, phone: fizzlePhone },
 };
