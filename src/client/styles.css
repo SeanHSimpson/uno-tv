@@ -3148,3 +3148,729 @@ button.game-card:active {
 .fz-target small {
   color: var(--muted);
 }
+
+/* =====================================================================
+   EUCHRE — up north: night lake, pine tree line, cedar table, birch cards
+   ===================================================================== */
+body.theme-mi {
+  --t0: #f0812f; /* blaze orange: Deer Camp */
+  --t1: #4fb3e3; /* lake blue: Lake Effect */
+  --cedar-1: #9a5b34;
+  --cedar-2: #6b3a1f;
+  --lake-1: #2e6f86;
+  --lake-2: #1b4b60;
+  --lake-3: #0f2d3b;
+  background:
+    radial-gradient(ellipse 120% 70% at 50% 110%, rgba(47, 125, 163, 0.35), transparent 70%),
+    linear-gradient(180deg, #0c1a2a 0%, #13293b 55%, #0d2230 100%);
+  background-color: #0c1a2a;
+}
+body.theme-mi .ph-results {
+  background: linear-gradient(180deg, #0c1a2a, #13344a);
+}
+.t0 {
+  --team: var(--t0);
+}
+.t1 {
+  --team: var(--t1);
+}
+
+/* ---------- TV ---------- */
+.euchre-tv {
+  position: relative;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1vmin;
+  padding: 0 3vmin;
+  min-height: 0;
+  isolation: isolate;
+}
+.eu-scenery {
+  position: absolute;
+  left: -3vmin;
+  top: -12vmin;
+  width: calc(100% + 6vmin);
+  height: calc(100% + 12vmin);
+  z-index: -1;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.eu-scores {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 3vmin;
+  align-items: stretch;
+}
+.eu-team {
+  background: rgba(9, 22, 30, 0.72);
+  border-radius: 2vmin;
+  padding: 0.8vmin 2.2vmin;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "name score" "who score" "tricks score";
+  align-items: center;
+  box-shadow: inset 0 0 0 0.3vmin color-mix(in srgb, var(--team) 55%, transparent);
+  display: grid;
+  gap: 0.5vmin;
+  align-content: start;
+}
+.eu-team.t1 {
+  text-align: right;
+  justify-items: end;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "score name" "score who" "score tricks";
+}
+.eu-team-name { grid-area: name; }
+.eu-team-who { grid-area: who; }
+.eu-team-score { grid-area: score; }
+.eu-team-tricks { grid-area: tricks; }
+.eu-team.making {
+  box-shadow:
+    inset 0 0 0 0.4vmin var(--team),
+    0 0 3vmin color-mix(in srgb, var(--team) 45%, transparent);
+}
+.eu-team-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 3.4vmin;
+  color: var(--team);
+}
+.eu-team-who {
+  display: flex;
+  align-items: center;
+  gap: 0.8vmin;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-weight: 700;
+}
+.eu-team-who span:not(.avatar) {
+  margin-right: 1vmin;
+}
+.eu-team-score {
+  display: grid;
+  justify-items: center;
+  gap: 0.6vmin;
+}
+.eu-team-score b {
+  font-family: var(--font-display);
+  font-size: 7vmin;
+  line-height: 1;
+}
+.eu-pips {
+  display: flex;
+  gap: 0.5vmin;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 16vmin;
+}
+.eu-pips i {
+  width: 1.8vmin;
+  height: 1.8vmin;
+  border-radius: 50%;
+  border: 0.3vmin solid color-mix(in srgb, var(--team) 60%, transparent);
+}
+.eu-pips i.on {
+  background: var(--team);
+  border-color: var(--team);
+  box-shadow: 0 0 1vmin var(--team);
+}
+.eu-team-tricks {
+  color: var(--muted);
+  font-weight: 700;
+}
+.eu-team-tricks b {
+  color: var(--cream);
+  font-size: 1.3em;
+}
+.eu-trump-chip {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.2vmin;
+  min-width: 34vmin;
+  padding: 0.8vmin 3vmin;
+  border-radius: 2vmin;
+  background: #fbf5e8;
+  color: var(--ink);
+  box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, 0.4);
+}
+.eu-trump-chip small {
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.eu-trump-chip b {
+  font-family: var(--font-display);
+  font-size: 3.2vmin;
+  line-height: 1.1;
+}
+.eu-trump-chip .suit-ico {
+  width: 5vmin;
+  height: 5vmin;
+}
+.eu-trump-chip em {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+.eu-trump-chip.s-H,
+.eu-trump-chip.s-D,
+.eu-ph-trump.s-H,
+.eu-ph-trump.s-D {
+  color: #b8322b;
+}
+.eu-trump-chip.s-S,
+.eu-trump-chip.s-C,
+.eu-ph-trump.s-S,
+.eu-ph-trump.s-C {
+  color: #1f3d33;
+}
+.eu-trump-chip.bidding {
+  background: rgba(9, 22, 30, 0.72);
+  color: var(--cream);
+  box-shadow: inset 0 0 0 0.3vmin rgba(251, 233, 192, 0.35);
+}
+.eu-trump-chip strong {
+  color: #b8322b;
+}
+
+.eu-table {
+  position: relative;
+  min-height: 0;
+}
+.eu-felt {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(118vmin, 74%);
+  height: 64%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.03) 0 1.2vmin, transparent 1.2vmin 3vmin),
+    radial-gradient(ellipse at 50% 40%, var(--lake-1) 0%, var(--lake-2) 60%, var(--lake-3) 100%);
+  box-shadow:
+    0 0 0 1.4vmin var(--cedar-2),
+    0 0 0 2.2vmin var(--cedar-1),
+    0 0 0 2.5vmin #3a2416,
+    0 3vmin 6vmin rgba(0, 0, 0, 0.55),
+    inset 0 0 6vmin rgba(0, 0, 0, 0.45);
+}
+.eu-mitten {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34vmin;
+  height: 34vmin;
+  transform: translate(-50%, -50%);
+  color: #fbf5e8;
+  opacity: 0.07;
+}
+.eu-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 0.8vmin;
+  color: var(--muted);
+  font-weight: 800;
+}
+.eu-kitty {
+  position: relative;
+  display: flex;
+}
+.eu-kitty .pcard {
+  --cw: 12vmin;
+}
+.eu-kitty-back {
+  rotate: -8deg;
+}
+.eu-upcard {
+  margin-left: -6vmin;
+  rotate: 6deg;
+  animation: eu-flip 0.5s cubic-bezier(0.2, 0.8, 0.25, 1);
+}
+@keyframes eu-flip {
+  from {
+    transform: rotateY(90deg) translateY(-2vmin);
+  }
+}
+.eu-big-trump {
+  color: #fbf5e8;
+  opacity: 0.16;
+}
+.eu-trick {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.eu-slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin-left: -5.25vmin;
+  margin-top: -7.9vmin;
+  z-index: var(--n);
+}
+.eu-slot .pcard {
+  --cw: 10.5vmin;
+}
+.eu-slot.pos-bottom {
+  transform: translate(0, 7vmin) rotate(2deg);
+}
+.eu-slot.pos-top {
+  transform: translate(0, -7vmin) rotate(-3deg);
+}
+.eu-slot.pos-left {
+  transform: translate(-13vmin, 0) rotate(-8deg);
+}
+.eu-slot.pos-right {
+  transform: translate(13vmin, 0) rotate(7deg);
+}
+.eu-slot.win .pcard {
+  filter: drop-shadow(0 0 0.4vmin #fbe9c0) drop-shadow(0 0 2.4vmin #f2b544);
+  animation: eu-win 0.6s ease-out;
+}
+@keyframes eu-win {
+  50% {
+    scale: 1.1;
+  }
+}
+
+.eu-seat {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 1.4vmin;
+  padding: 1.2vmin 2vmin;
+  border-radius: 2vmin;
+  background: rgba(9, 22, 30, 0.84);
+  box-shadow: inset 0 0 0 0.3vmin color-mix(in srgb, var(--team) 60%, transparent);
+  min-width: 30vmin;
+  z-index: 2;
+  transition:
+    box-shadow 0.25s,
+    opacity 0.25s;
+}
+.eu-seat.pos-bottom {
+  left: 50%;
+  bottom: 0;
+  translate: -50% 0;
+}
+.eu-seat.pos-top {
+  left: 50%;
+  top: 0;
+  translate: -50% 0;
+}
+.eu-seat.pos-left {
+  left: 0;
+  top: 50%;
+  translate: 0 -50%;
+}
+.eu-seat.pos-right {
+  right: 0;
+  top: 50%;
+  translate: 0 -50%;
+}
+.eu-seat.turn {
+  box-shadow:
+    inset 0 0 0 0.45vmin var(--amber),
+    0 0 4vmin var(--amber-glow);
+}
+.eu-seat.out {
+  opacity: 0.45;
+}
+.eu-seat.offline .avatar {
+  filter: grayscale(1);
+}
+.eu-seat .avatar {
+  width: 7vmin;
+  height: 7vmin;
+  font-size: 3.6vmin;
+  box-shadow: 0 0 0 0.4vmin var(--team);
+}
+.eu-seat-info {
+  display: grid;
+  gap: 0.4vmin;
+}
+.eu-seat-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 3vmin;
+  white-space: nowrap;
+}
+.eu-seat-tags {
+  display: flex;
+  gap: 0.8vmin;
+  align-items: center;
+  font-size: 0.85em;
+  font-weight: 800;
+}
+.eu-dealer {
+  background: #fbf5e8;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 0.1em 0.7em;
+}
+.eu-maker {
+  background: var(--team);
+  color: #0c1a2a;
+  border-radius: 999px;
+  padding: 0.1em 0.7em;
+}
+.eu-out {
+  color: var(--muted);
+}
+.eu-seat-hand {
+  display: flex;
+  align-items: center;
+  gap: 0.3vmin;
+  min-height: 2.6vmin;
+}
+.eu-seat-hand i {
+  width: 1.7vmin;
+  height: 2.6vmin;
+  border-radius: 0.3vmin;
+  background: #1d4f6e;
+  box-shadow: inset 0 0 0 0.25vmin #fbf5e8;
+}
+.eu-taken {
+  margin-left: 1vmin;
+  color: var(--amber);
+  font-weight: 800;
+  white-space: nowrap;
+}
+.eu-bid {
+  position: absolute;
+  left: 50%;
+  top: -1.2vmin;
+  translate: -50% -100%;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2.8vmin;
+  padding: 0.4vmin 1.8vmin;
+  border-radius: 1.6vmin;
+  white-space: nowrap;
+  background: #fbf5e8;
+  color: var(--ink);
+  animation: eu-bubble-in 0.3s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.eu-seat.pos-top .eu-bid {
+  top: auto;
+  bottom: -1.2vmin;
+  translate: -50% 100%;
+}
+.eu-bid.pass {
+  background: rgba(251, 245, 232, 0.25);
+  color: var(--cream);
+}
+.eu-bid.call {
+  background: var(--amber);
+}
+@keyframes eu-bubble-in {
+  from {
+    scale: 0.6;
+    opacity: 0;
+  }
+}
+.eu-seat.pos-top .bubble {
+  top: auto;
+  bottom: -2vmin;
+  translate: -50% 100%;
+}
+.eu-banner {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  translate: -50% -50%;
+  z-index: 20;
+  text-align: center;
+  padding: 3vmin 6vmin;
+  border-radius: 3vmin;
+  background: rgba(9, 22, 30, 0.93);
+  box-shadow:
+    inset 0 0 0 0.5vmin var(--team),
+    0 2vmin 6vmin rgba(0, 0, 0, 0.6);
+  animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.25, 1);
+}
+.eu-banner h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 6vmin;
+  color: var(--team);
+}
+.eu-banner.euchred h2 {
+  font-size: 8vmin;
+}
+.eu-banner p {
+  margin: 1vmin 0;
+  font-size: 1.3em;
+}
+.eu-banner-score {
+  font-family: var(--font-display);
+  font-size: 4vmin;
+}
+.eu-banner small {
+  color: var(--muted);
+}
+.eu-results-card {
+  box-shadow: inset 0 0 0 0.5vmin var(--team);
+}
+.eu-winners {
+  display: flex;
+  gap: 2vmin;
+  justify-content: center;
+}
+
+/* ---------- phone ---------- */
+.euchre-phone {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.euchre-phone > .eu-hand {
+  flex: 1 1 0;
+}
+.eu-ph-status {
+  margin: 0 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: rgba(9, 22, 30, 0.6);
+  display: grid;
+  gap: 6px;
+}
+.my-turn .eu-ph-status {
+  background: linear-gradient(180deg, rgba(255, 191, 94, 0.28), rgba(255, 191, 94, 0.12));
+  box-shadow: inset 0 0 0 2px var(--amber);
+}
+.eu-ph-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.eu-ph-trump {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fbf5e8;
+  border-radius: 12px;
+  padding: 4px 10px;
+}
+.eu-ph-trump span {
+  display: grid;
+  line-height: 1.05;
+}
+.eu-ph-trump small {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+}
+.eu-ph-trump b {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+.eu-ph-trump.none {
+  background: rgba(251, 245, 232, 0.14);
+  color: var(--cream);
+}
+.eu-ph-score {
+  display: flex;
+  gap: 8px;
+}
+.eu-ph-score > div {
+  display: grid;
+  justify-items: center;
+  min-width: 58px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 2px var(--team);
+  line-height: 1.1;
+}
+.eu-ph-score small {
+  color: var(--team);
+  font-weight: 800;
+  font-size: 0.7rem;
+}
+.eu-ph-score b {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+}
+.eu-ph-score em {
+  font-style: normal;
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+.eu-ph-msg {
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+.eu-ph-partner {
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.eu-ph-partner .eu-dealer {
+  font-size: 0.75rem;
+}
+.eu-ph-table {
+  margin: 4px 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-areas:
+    ". across ."
+    "left mid right"
+    ". me .";
+  gap: 2px 6px;
+  justify-items: center;
+  align-items: center;
+  padding: 8px;
+  border-radius: 50% / 40%;
+  background: radial-gradient(ellipse at 50% 40%, #2e6f86, #1b4b60 60%, #0f2d3b);
+  box-shadow:
+    0 0 0 5px #6b3a1f,
+    0 0 0 8px #9a5b34;
+}
+.eu-ph-spot {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--muted);
+  max-width: 100%;
+}
+.eu-ph-spot span {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.eu-ph-spot.turn span {
+  color: var(--amber);
+}
+.eu-ph-spot.out {
+  opacity: 0.45;
+}
+.eu-ph-spot.across {
+  grid-area: across;
+}
+.eu-ph-spot.left {
+  grid-area: left;
+}
+.eu-ph-spot.right {
+  grid-area: right;
+}
+.eu-ph-spot.me {
+  grid-area: me;
+}
+.eu-ph-mid {
+  grid-area: mid;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 800;
+}
+.eu-ph-up {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+.eu-ph-card {
+  --cw: 40px;
+}
+.eu-ph-spot.win .pcard {
+  filter: drop-shadow(0 0 6px #f2b544);
+}
+.eu-ph-empty {
+  width: 40px;
+  aspect-ratio: 2/3;
+  border-radius: 5px;
+  border: 2px dashed rgba(251, 245, 232, 0.22);
+  display: grid;
+  place-items: center;
+  font-size: 0.6rem;
+}
+.eu-ph-spot.turn .eu-ph-empty {
+  border-color: var(--amber);
+}
+.eu-ph-bid {
+  padding: 0 16px;
+  display: grid;
+  gap: 8px;
+}
+.eu-bid-row {
+  display: flex;
+  gap: 8px;
+}
+.eu-bid-row .btn {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.eu-alone.on {
+  background: var(--amber);
+  color: var(--ink);
+}
+.eu-suits {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.eu-suit {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  background: #fbf5e8;
+  border: 0;
+  border-radius: 14px;
+  font-weight: 800;
+  min-height: 70px;
+}
+.eu-suit.s-H,
+.eu-suit.s-D {
+  color: #b8322b;
+}
+.eu-suit.s-S,
+.eu-suit.s-C {
+  color: #1f3d33;
+}
+.eu-ph-actions {
+  padding: 0 16px 14px;
+  display: flex;
+}
+.eu-ph-actions .btn {
+  flex: 1;
+}
+.eu-hand .pcard.trump::before {
+  content: "Trump";
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  translate: -50% 0;
+  font-size: 10px;
+  font-weight: 800;
+  background: var(--amber);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 1px 7px;
+  letter-spacing: 0.06em;
+  z-index: 1;
+}

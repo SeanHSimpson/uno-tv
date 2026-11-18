@@ -10,6 +10,7 @@ Cozy party games for one TV and a room full of phones. **The TV is the table; ev
 | Game | Players | In one line |
 | --- | --- | --- |
 | 🃏 **OhNo!** | 2–10 | Match colors or symbols and empty your hand first. |
+| 🦌 **Euchre** | 4 | Michigan's card game. Two teams, five tricks, and bowers. |
 | ♠️ **Contract Rummy** | 2–8 | Seven rounds, seven contracts. Build sets and runs, go out first, keep your score low. |
 | 🧨 **Fizzle!** | 2–8 | Pass the lit firecracker before it goes 💥. Last one standing wins. |
 | 🤫 **Hush** (co-op) | 2–6 | Play every number in rising order, together, without saying a word. |
@@ -47,19 +48,28 @@ The TV plays the music; phones play small sounds for their own player (the turn 
 
 | When | Music |
 | --- | --- |
-| Lobby & between rounds | Chopin, *Nocturne in E-flat, Op. 9 No. 2*: the complete piece (about 3½ min) |
-| During play (rotates) | Grieg's *In the Hall of the Mountain King* (complete, with its slow build to a frantic finish, about 2½ min); Petzold/Bach's *Minuet in G* (complete, with repeats); *Korobeiniki* (the Russian folk song that the classic falling-blocks game made famous). The whole folk tune is only 8 bars, so it's arranged as four verses with harmony, an octave lift, and the traditional speed-up on each repeat |
+| Lobby & between rounds (rotates) | Chopin's *Nocturne Op. 9 No. 2*, Debussy's *Clair de Lune*, Beethoven's *Für Elise*, Satie's *Gymnopédie No. 1*, Pachelbel's *Canon in D* |
+| During play (rotates) | Joplin's *The Entertainer* and *Maple Leaf Rag*, Mozart's *Rondo alla Turca* and *Eine kleine Nachtmusik* (1st movement), Sousa's *The Stars and Stripes Forever*, Grieg's *In the Hall of the Mountain King*, Petzold/Bach's *Minuet in G*, and *Korobeiniki* (the Russian folk song that the classic falling-blocks game made famous; the whole tune is only 8 bars, so it's arranged as four verses with harmony, an octave lift and the traditional speed-up) |
+
+Every piece plays complete, start to finish, then the next one in the list comes on.
 
 - The music **speeds up** when anyone is down to their last card.
 - Pressing **OhNo!** sets off a suspense sting on the TV: a rumble and rising tremolo, then *dun… dun… DUNNN*.
 - **TV:** 🔊 button in the top bar, or press **M** to mute. The host can also turn the TV's music and sound effects on or off from ⚙︎ on their phone, even mid-game. Browsers only allow sound after a click, so if the TV page was refreshed, it shows "Click anywhere for music & sound".
 - **Phones:** 🔊 button in the top corner. On iPhone, the silent switch also mutes web sounds.
 
-All four pieces are public domain, played on a synthesized music box. The Chopin, Grieg and Petzold scores were converted from the [Mutopia Project](https://www.mutopiaproject.org)'s free MIDI files into note lists in `src/client/music/`:
+All the music is public domain (a few typeset editions are Creative Commons, credited below), played on a synthesized music box. Everything except Korobeiniki was converted from the [Mutopia Project](https://www.mutopiaproject.org)'s free MIDI files into note lists in `src/client/music/`:
 
 - Chopin, Nocturne Op. 9 No. 2: [Mutopia #1590](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1590), from the G. Schirmer 1881 edition, typeset by Renato Biolcati Rinaldi. CC BY-SA 3.0.
 - Grieg, *In the Hall of the Mountain King* (Grieg's own piano arrangement): [Mutopia #1888](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1888), from The University Society 1918 edition. Public domain.
 - Petzold, Minuet in G, BWV Anh. 114: [Mutopia, Notebook for Anna Magdalena Bach No. 4](https://www.mutopiaproject.org/ftp/BachJS/BWVAnh114/anna-magdalena-04/).
+- Joplin, The Entertainer ([Mutopia #263](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=263)) and Maple Leaf Rag ([#23](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=23)). Public domain.
+- Mozart, Rondo alla Turca, K. 331 ([#108](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=108)) and Eine kleine Nachtmusik, K. 525, I ([#900](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=900)). Public domain.
+- Sousa, The Stars and Stripes Forever, piano edition ([#626](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=626)). Public domain.
+- Beethoven, Für Elise, WoO 59 ([#931](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931)). Public domain.
+- Debussy, Clair de Lune ([#1778](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1778)). Public domain.
+- Satie, Gymnopédie No. 1 ([#37](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=37)). Public domain.
+- Pachelbel, Canon in D, melody line ([#1700](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1700)), from Jim Paterson's edition. CC BY 3.0. The ground bass and its chords are added in `songs.ts`.
 
 Very low notes are lifted an octave or two so a music box can sound them.
 
@@ -114,6 +124,18 @@ The traditional seven-contract rummy (the public-domain family that games like P
 - **Host settings:** Classic (7 contracts) or Short (4: 2 sets → set + run → 2 runs → 3 runs), and "May I?" on or off.
 - **Bots** collect toward the contract, only take discards that complete something, lay down as soon as they can, add to groups, and sometimes shout "May I?".
 
+## Euchre
+
+The classic four-player partnership game, dressed up north: a cedar table on a night lake, a pine tree line, birch-bark cards with a **buck** on the Jacks, a **lighthouse** on the Queens and a **black bear** on the Kings, and both peninsulas on the card backs. The teams are 🦌 **Deer Camp** (blaze orange) and 🌊 **Lake Effect** (lake blue). Get euchred and you'll hear a loon.
+
+- Exactly **4 players**, partners across from each other (seats are shuffled each game). Add bots to fill empty seats.
+- 24 cards (9 through Ace), 5 each, one card turned up.
+- **Bidding, round 1:** starting left of the dealer, order up the turned card's suit as trump (the dealer picks it up and discards) or pass. **Round 2:** name any other suit, or pass. **Stick the dealer** (on by default): the dealer can't pass in round 2. With it off, four more passes throw the hand in.
+- Whoever names trump may **go alone**: their partner sits out.
+- **Trump order:** Right bower (Jack of trump), Left bower (the other Jack of the same colour, which counts as trump), A, K, Q, 10, 9. Follow the suit led if you can; your phone only lets you play legal cards.
+- **Scoring:** the makers take 3–4 tricks for **1**, all 5 for **2** (**4** alone). Fewer than 3 and they're **euchred**: the defenders get **2**. First to **10** (or 5 for a quick game) wins.
+- Hands deal themselves after a short summary. If someone leaves mid-game, a bot keeps their seat warm. The host can also let a bot make a stuck player's move.
+
 ## Fizzle!
 
 An original hot-potato card game for 2–8 players.
@@ -166,6 +188,7 @@ src/
       hush/                Hush rules + bot timing (engine.ts), module.ts adapter
       rummy/               Contract Rummy: cards & melds + contract finder (cards.ts), rules (engine.ts), bot, module
       fizzle/              Fizzle! rules (engine.ts), bot + module
+      euchre/              Euchre rules (engine.ts), bot (bot.ts), module
   server/
     index.ts               Worker entry + `Room` Durable Object (sockets, storage, bot timers)
   client/

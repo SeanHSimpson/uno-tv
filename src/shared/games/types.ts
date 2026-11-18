@@ -3,7 +3,7 @@
 
 import type { Member, Rng } from "../common";
 
-export type GameId = "ohno" | "hush" | "rummy" | "fizzle";
+export type GameId = "ohno" | "hush" | "rummy" | "fizzle" | "euchre";
 
 /** A host-adjustable option, declared as data so the lobby can render and validate it. */
 export interface SettingDef {
