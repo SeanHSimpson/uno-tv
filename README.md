@@ -10,6 +10,7 @@ Cozy party games for one TV and a room full of phones. **The TV is the table; ev
 | Game | Players | In one line |
 | --- | --- | --- |
 | 🃏 **OhNo!** | 2–10 | Match colors or symbols and empty your hand first. |
+| ♠️ **Contract Rummy** | 2–8 | Seven rounds, seven contracts. Build sets and runs, go out first, keep your score low. |
 | 🤫 **Hush** (co-op) | 2–6 | Play every number in rising order, together, without saying a word. |
 
 Runs entirely on Cloudflare: one Worker serves the frontend, and every room is a Durable Object that owns the room, the running game and all of its WebSockets.
@@ -81,6 +82,37 @@ The host can tap **🤖 Add a bot player** in the lobby, or in ⚙︎ during a g
 - A quiet heartbeat every 15 seconds keeps routers and mobile carriers from closing idle connections. The room answers it without waking up, so it costs nothing.
 - If someone's phone is gone on their turn, anyone can tap "skip their turn".
 
+## Contract Rummy
+
+The traditional seven-contract rummy (the public-domain family that games like Phase 10 grew from), played with two decks plus jokers (three decks for 5–8 players).
+
+| Round | Contract | Cards dealt |
+| --- | --- | --- |
+| 1 | 2 sets of 3 | 10 |
+| 2 | 1 set of 3 + 1 run of 4 | 10 |
+| 3 | 2 runs of 4 | 10 |
+| 4 | 3 sets of 3 | 10 |
+| 5 | 2 sets of 3 + 1 run of 4 | 12 |
+| 6 | 1 set of 3 + 2 runs of 4 | 12 |
+| 7 | 3 runs of 4: lay down your **whole hand at once**, no discard | 12 |
+
+- **Set:** 3+ cards of the same rank. **Run:** 4+ cards in a row of one suit. Aces can be low (A-2-3-4) or high (J-Q-K-A), but runs don't wrap around.
+- **Jokers** are wild, but no group can have more jokers than real cards.
+- **Your turn:**
+  1. Draw from the deck, or take the top discard.
+  2. Lay down your contract (once per round). Groups can be longer than the minimum.
+  3. Once you're down, add cards to *anyone's* groups.
+  4. Discard one card. You can't throw back the card you just took from the discard pile.
+- **Go out** by getting rid of every card. Everyone else scores what they're still holding: 2–9 = 5, 10–K = 10, A = 15, Joker = 50. **Lowest total after all rounds wins.**
+- **"May I?":** when it isn't your turn, ask for the top discard. If the current player draws from the deck instead of taking it, the first person who asked (in seat order) gets it plus a penalty card from the deck. You get 3 per round.
+- **On your phone:** tap cards to select them.
+  - **Lay down:** the button lights up ✓ as soon as your selection makes the contract. You don't have to arrange the groups; the game works out the sets and runs.
+  - **Add to a group:** pick a group from the cards that fit.
+  - **Discard:** select one card.
+  - **Sort:** toggles between rank and suit.
+- **Host settings:** Classic (7 contracts) or Short (4: 2 sets → set + run → 2 runs → 3 runs), and "May I?" on or off.
+- **Bots** collect toward the contract, only take discards that complete something, lay down as soon as they can, add to groups, and sometimes shout "May I?".
+
 ## Hush
 
 A cooperative game for 2–6 players, played in silence.
@@ -109,6 +141,7 @@ src/
       index.ts             The list of games
       ohno/                OhNo! rules (engine.ts), bot (bot.ts), types, module.ts adapter
       hush/                Hush rules + bot timing (engine.ts), module.ts adapter
+      rummy/               Contract Rummy: cards & melds + contract finder (cards.ts), rules (engine.ts), bot, module
   server/
     index.ts               Worker entry + `Room` Durable Object (sockets, storage, bot timers)
   client/
@@ -121,7 +154,8 @@ src/
     audio.ts             Synthesizer, music scheduler, sound effects, haptics
     songs.ts             The playlist (complete public-domain pieces + Korobeiniki arrangement)
     music/*.ts           Note lists converted from Mutopia Project MIDI files (credits inside)
-    cards.ts             Original SVG card art (faces + backs)
+    cards.ts             Original SVG card art for OhNo! (faces + backs)
+    playingCards.ts      Cozy SVG playing cards (Contract Rummy)
     net.ts               PartySocket connection, room API, player id
     ui.ts, fx.ts         Helpers: avatars, toasts, fly animation, confetti, wake lock
     styles.css           Theme
