@@ -174,7 +174,9 @@ export function mountTv(root: HTMLElement, code: string) {
     $("#tv-round").innerHTML =
       s.phase === "lobby"
         ? ""
-        : `Round ${s.round}${s.settings.targetScore ? ` · first to ${s.settings.targetScore}` : ""}${s.settings.stacking ? " · stacking on" : ""}`;
+        : `Round ${s.round}${s.settings.targetScore ? ` · first to ${s.settings.targetScore}` : ""}${s.settings.stacking ? " · stacking on" : ""}${
+            s.phase === "playing" ? ` · <span class="dir">${s.direction === 1 ? "↻ clockwise" : "↺ counter-clockwise"}</span>` : ""
+          }`;
 
     // Lobby
     $("#tv-lobby").hidden = s.phase !== "lobby";
@@ -223,7 +225,7 @@ export function mountTv(root: HTMLElement, code: string) {
       ? ""
       : enough
         ? `${host?.name ?? "The host"} can start from their phone, or press Start here.`
-        : "Need at least one more player.";
+        : "Need at least one more player (the host can add a bot).";
     $("#tv-start").hidden = !enough;
     const r = s.settings;
     $("#lobby-rules").innerHTML = [
@@ -278,7 +280,7 @@ export function mountTv(root: HTMLElement, code: string) {
         <div class="seat-body">
           ${avatar(p)}
           <div class="seat-text">
-            <div class="seat-name">${esc(p.name)}${p.id === s.hostId ? ' <i class="crown" title="Host">♛</i>' : ""}</div>
+            <div class="seat-name">${esc(p.name)}${p.bot ? ' <span class="bot-tag">bot</span>' : ""}${p.id === s.hostId ? ' <i class="crown" title="Host">♛</i>' : ""}</div>
             <div class="seat-meta"><b>${p.count}</b> card${p.count === 1 ? "" : "s"}${
               s.settings.targetScore || s.round > 1 ? ` · ${p.score} pts` : ""
             }${p.calledOhNo && p.count <= 1 ? ' · <span class="ohno-tag">OhNo!</span>' : ""}</div>
@@ -398,8 +400,9 @@ export function mountTv(root: HTMLElement, code: string) {
           break;
         }
         case "skip":
-          bubble(e.pid, "Skipped", "bad", delay);
-          delay += 200;
+          bubble(e.pid, "Skipped!", "bad", delay);
+          stamp(e.pid, delay);
+          delay += 250;
           break;
         case "reverse":
           $("#ring").animate([{ transform: "rotate(0deg) scale(1)" }, { transform: `rotate(${e.direction === 1 ? 180 : -180}deg) scale(1.06)` }, { transform: "rotate(0) scale(1)" }], {
@@ -437,8 +440,10 @@ export function mountTv(root: HTMLElement, code: string) {
         return `${n(e.pid)} drew ${e.count === 1 ? "a card" : `${e.count} cards`}`;
       case "pass":
         return `${n(e.pid)} passed`;
+      case "skip":
+        return `${n(e.pid)} is skipped`;
       case "reverse":
-        return `Direction reversed`;
+        return `Reversed — now going ${e.direction === 1 ? "↻ clockwise" : "↺ counter-clockwise"}`;
       case "ohno":
         return `${n(e.pid)} called OhNo!`;
       case "caught":
@@ -463,6 +468,19 @@ export function mountTv(root: HTMLElement, code: string) {
       b.textContent = text;
       seat.append(b);
       setTimeout(() => b.remove(), 1900);
+    }, delay);
+  }
+
+  /** A big ⊘ stamped over a skipped player's seat. */
+  function stamp(pid: string, delay: number) {
+    const seat = seatEls.get(pid);
+    if (!seat) return;
+    setTimeout(() => {
+      const st = document.createElement("div");
+      st.className = "skip-stamp";
+      st.textContent = "⊘";
+      seat.append(st);
+      setTimeout(() => st.remove(), 1600);
     }, delay);
   }
 

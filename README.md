@@ -39,15 +39,21 @@ The TV plays the music; phones play small sounds for their own player (the turn 
 
 | When | Music |
 | --- | --- |
-| Lobby & between rounds | Chopin, *Nocturne in E-flat, Op. 9 No. 2* (opening theme) |
-| During play (rotates) | *Korobeiniki* (the Russian folk song that the classic falling-blocks game made famous), Grieg's *In the Hall of the Mountain King*, and Petzold/Bach's *Minuet in G* |
+| Lobby & between rounds | Chopin, *Nocturne in E-flat, Op. 9 No. 2*: the complete piece (about 3½ min) |
+| During play (rotates) | Grieg's *In the Hall of the Mountain King* (complete, with its slow build to a frantic finish, about 2½ min); Petzold/Bach's *Minuet in G* (complete, with repeats); *Korobeiniki* (the Russian folk song that the classic falling-blocks game made famous). The whole folk tune is only 8 bars, so it's arranged as four verses with harmony, an octave lift, and the traditional speed-up on each repeat |
 
 - The music **speeds up** when anyone is down to their last card.
 - Pressing **OhNo!** sets off a suspense sting on the TV: a rumble and rising tremolo, then *dun… dun… DUNNN*.
 - **TV:** 🔊 button in the top bar, or press **M** to mute. The host can also turn the TV's music and sound effects on or off from ⚙︎ on their phone, even mid-game. Browsers only allow sound after a click, so if the TV page was refreshed, it shows "Click anywhere for music & sound".
 - **Phones:** 🔊 button in the top corner. On iPhone, the silent switch also mutes web sounds.
 
-All four pieces are public domain. These are our own music-box arrangements. The nocturne's notes were checked against the [Mutopia Project](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1590) edition (from G. Schirmer, 1881; CC BY-SA 3.0).
+All four pieces are public domain, played on a synthesized music box. The Chopin, Grieg and Petzold scores were converted from the [Mutopia Project](https://www.mutopiaproject.org)'s free MIDI files into note lists in `src/client/music/`:
+
+- Chopin, Nocturne Op. 9 No. 2: [Mutopia #1590](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1590), from the G. Schirmer 1881 edition, typeset by Renato Biolcati Rinaldi. CC BY-SA 3.0.
+- Grieg, *In the Hall of the Mountain King* (Grieg's own piano arrangement): [Mutopia #1888](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1888), from The University Society 1918 edition. Public domain.
+- Petzold, Minuet in G, BWV Anh. 114: [Mutopia, Notebook for Anna Magdalena Bach No. 4](https://www.mutopiaproject.org/ftp/BachJS/BWVAnh114/anna-magdalena-04/).
+
+Very low notes are lifted an octave or two so a music box can sound them.
 
 ### Host controls (⚙︎ on the host's phone)
 
@@ -58,6 +64,17 @@ All four pieces are public domain. These are our own music-box arrangements. The
 
 People can join in the middle of a round; they're dealt 7 cards. Refreshing a phone, or locking it and coming back, reconnects you to the same seat with the same hand.
 
+### Bot players (great for testing on your own)
+
+The host can tap **🤖 Add a bot player** in the lobby, or in ⚙︎ during a game (a bot added mid-round is dealt in). One person plus a bot is enough to start. Bots take their turns after a short pause, stack and play action cards sensibly, save wilds for later, usually remember to call OhNo! (sometimes they forget, so catch them!), and now and then catch *you*. Remove a bot with its **×** in the lobby, or **Remove** in ⚙︎. Bots run inside the room on the server, so they keep playing even if a phone locks.
+
+### Connection tips
+
+- Phones keep their screens awake during a game, so they don't lock and drop off.
+- If a phone does drop (screen locked, Wi-Fi switching to mobile data), it reconnects by itself as soon as it's back, with the same hand. Short blips go unnoticed: "Reconnecting…" only shows if the connection stays down for a few seconds, and the TV waits 8 seconds before greying out a seat.
+- A quiet heartbeat every 15 seconds keeps routers and mobile carriers from closing idle connections. The room answers it without waking up, so it costs nothing.
+- If someone's phone is gone on their turn, anyone can tap "skip their turn".
+
 ## Project layout
 
 ```
@@ -67,13 +84,16 @@ src/
   shared/
     types.ts             Card / state / wire-protocol types (shared by client + server)
     engine.ts            Pure rules engine: deal, play, draw, stacking, OhNo!, scoring, host actions
+    bot.ts               Computer player: picks a move from the table state
   server/
     index.ts             Worker entry + `Room` Durable Object (PartyServer, hibernating WebSockets)
   client/
     main.ts              Home / join screens and routing
     tv.ts                TV table: seats, piles, direction ring, animations, lobby, results, music
     phone.ts             Phone hand: auto-fitting grid, swipe/tap to play, color picker, OhNo!/Catch, host sheet
-    audio.ts             Synthesized music (public-domain tunes) + sound effects + haptics
+    audio.ts             Synthesizer, music scheduler, sound effects, haptics
+    songs.ts             The playlist (complete public-domain pieces + Korobeiniki arrangement)
+    music/*.ts           Note lists converted from Mutopia Project MIDI files (credits inside)
     cards.ts             Original SVG card art (faces + backs)
     net.ts               PartySocket connection, room API, player id
     ui.ts, fx.ts         Helpers: avatars, toasts, fly animation, confetti, wake lock
@@ -136,7 +156,7 @@ Wrangler prints your URL, for example `https://ohno.<your-subdomain>.workers.dev
 
 ## Ideas for what's next
 
-- **More music:** add more public-domain tunes to `SONGS` in `src/client/audio.ts` (one line of notes per bar; the tests check every bar adds up).
+- **More music:** add public-domain pieces to `SONGS` in `src/client/songs.ts`. Mutopia's MIDI files can be converted into the same note-list format as the files in `src/client/music/`.
 - **More house rules:** 7-0 (a 7 swaps hands, a 0 rotates everyone's hands), jump-in (play an identical card out of turn), challenging a Wild +4 (only legal when you have no card of the current color), and draw-until-playable with forced play.
 - **Turn timer:** an optional countdown ring on the TV seat, with auto-draw when it runs out. It's a good fit for a Durable Object alarm.
 - **Spectators:** a third connection role that sees the table but has no hand, for a second TV or someone following along remotely.

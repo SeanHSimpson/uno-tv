@@ -227,6 +227,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
     else if (a === "lobby") (send({ t: "lobby" }), closeSheets());
     else if (a === "skip") (send({ t: "skip" }), closeSheets());
     else if (a === "kick") send({ t: "kick", pid: btn.dataset.pid! });
+    else if (a === "addBot") send({ t: "addBot" });
     else if (a === "catch") send({ t: "catch", target: btn.dataset.pid! });
     else if (a === "set") {
       const key = btn.dataset.key as keyof Settings;
@@ -463,9 +464,19 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
         <h2>You're in! 🎉</h2>
         <p class="muted">${isHost ? "You're the host. Start when everyone's here." : `Waiting for ${esc(playerName(s.hostId))} to start the game…`}</p>
         <div class="lobby-players">${s.players
-          .map((p) => `<div class="lobby-player">${avatar(p)}<span>${esc(p.name)}${p.id === pid ? " (you)" : ""}</span>${p.id === s.hostId ? '<i class="crown">♛</i>' : ""}</div>`)
+          .map(
+            (p) =>
+              `<div class="lobby-player">${avatar(p)}<span>${esc(p.name)}${p.id === pid ? " (you)" : ""}</span>${p.id === s.hostId ? '<i class="crown">♛</i>' : ""}${
+                isHost && p.bot ? `<button class="remove-bot" data-act="kick" data-pid="${esc(p.id)}" aria-label="Remove ${esc(p.name)}">×</button>` : ""
+              }</div>`,
+          )
           .join("")}</div>
-        ${isHost ? `${settingsHtml(s)}<button class="btn btn-primary btn-xl wide" data-act="start" ${enough ? "" : "disabled"}>${enough ? "Deal the cards" : "Waiting for one more player"}</button>` : ""}
+        ${
+          isHost
+            ? `<button class="btn btn-ghost wide" data-act="addBot">🤖 Add a bot player</button>
+               ${settingsHtml(s)}<button class="btn btn-primary btn-xl wide" data-act="start" ${enough ? "" : "disabled"}>${enough ? "Deal the cards" : "Waiting for one more player (or add a bot)"}</button>`
+            : ""
+        }
       </div>`;
   }
 
@@ -516,6 +527,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
           }</div>`,
         )
         .join("")}</div>
+      <button class="btn btn-ghost wide" data-act="addBot">🤖 Add a bot player${s.phase === "playing" ? " (dealt in now)" : ""}</button>
       ${s.phase === "playing" && cur && cur.id !== pid ? `<button class="btn btn-ghost wide" data-act="skip">Skip ${esc(cur.name)}'s turn</button>` : ""}
       ${s.phase !== "lobby" ? `<button class="btn btn-ghost wide" data-act="lobby">End game &amp; return to lobby</button>` : ""}
       <button class="btn btn-ghost wide" data-close>Close</button>`;
