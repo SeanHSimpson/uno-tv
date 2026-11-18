@@ -366,6 +366,33 @@ class AudioEngine {
     });
   }
 
+  /** Fizzle!: a fuse catching and sizzling. */
+  hiss() {
+    this.sfx((t, out) => {
+      this.noiseHit(t, 1.1, 6000, 0.22, "highpass", out, 3000);
+      for (let i = 0; i < 6; i++) this.noiseHit(t + 0.1 + i * 0.13 + Math.random() * 0.05, 0.03, 4500, 0.25, "bandpass", out);
+    });
+  }
+
+  /** Fizzle!: the firecracker goes off. */
+  boom() {
+    this.sfx((t, out) => {
+      this.noiseHit(t, 1.4, 900, 0.9, "lowpass", out, 80);
+      const g = this.env(t, 0.9, 0.004, 0.9, out);
+      this.osc("sine", 110, t, 0.9, g, 32);
+      this.noiseHit(t + 0.02, 0.25, 3000, 0.5, "bandpass", out, 600);
+    });
+    this.duck(2, 0.1);
+  }
+
+  /** Fizzle!: water douses the fuse. */
+  splash() {
+    this.sfx((t, out) => {
+      this.noiseHit(t, 0.5, 5000, 0.4, "bandpass", out, 700);
+      this.noiseHit(t + 0.12, 0.6, 2500, 0.18, "lowpass", out, 400);
+    });
+  }
+
   /** A single music-box note (Hush plays one per card, pitched by its number). */
   note(midi: number, vol = 0.3) {
     this.sfx((t, out) => this.musicBox(hz(midi), t, 1.4, vol, out));

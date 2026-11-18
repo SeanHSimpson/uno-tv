@@ -112,7 +112,8 @@ describe("starting, playing and ending", () => {
     const pub = JSON.stringify(R.gameView(r, null));
     expect(pub).not.toContain('"hand"');
     const mine = R.gameView(r, pid(r, "Ann"))!.me as { hand: unknown[] };
-    expect(mine.hand).toHaveLength(7);
+    // 7 cards (or 9 if the first card turned over was a +2 and Ann went first).
+    expect([7, 9]).toContain(mine.hand.length);
   });
 
   it("someone joining mid-OhNo! is dealt in; names and pictures flow into the game", () => {
