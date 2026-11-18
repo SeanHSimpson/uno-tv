@@ -114,6 +114,8 @@ export function updateSettings(s: GameState, by: string, patch: Partial<Settings
     next.targetScore = patch.targetScore;
   if (typeof patch.catchPenalty === "number" && patch.catchPenalty >= 1 && patch.catchPenalty <= 4)
     next.catchPenalty = Math.floor(patch.catchPenalty);
+  if (typeof patch.tvMusic === "boolean") next.tvMusic = patch.tvMusic;
+  if (typeof patch.tvSounds === "boolean") next.tvSounds = patch.tvSounds;
   s.settings = next;
 }
 

@@ -1,6 +1,6 @@
 import { getServerByName, routePartykitRequest, Server, type Connection, type ConnectionContext } from "partyserver";
 import * as engine from "../shared/engine";
-import type { ClientMessage, GameEvent, GameState, ServerMessage } from "../shared/types";
+import { DEFAULT_SETTINGS, type ClientMessage, type GameEvent, type GameState, type ServerMessage } from "../shared/types";
 
 type ConnState = { role: "tv" } | { role: "player"; pid: string };
 
@@ -19,6 +19,8 @@ export class Room extends Server<Env> {
 
   async onStart() {
     this.game = (await this.ctx.storage.get<GameState>(STORAGE_KEY)) ?? null;
+    // Rooms saved by an older version may be missing newer settings.
+    if (this.game) this.game.settings = { ...DEFAULT_SETTINGS, ...this.game.settings };
   }
 
   /** RPC from the Worker when a TV creates a room. Returns false if the code is taken. */

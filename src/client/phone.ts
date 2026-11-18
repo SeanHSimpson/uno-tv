@@ -2,7 +2,8 @@ import { COLORS, type Color, type GameEvent, type PrivateState, type PublicState
 import { cardEl, COLOR_NAMES, shapeSvg, shortLabel, sortHand } from "./cards";
 import { confetti } from "./fx";
 import { connectRoom, playerId } from "./net";
-import { $, avatar, esc, fly, keepAwake, reducedMotion, toast, vibrate } from "./ui";
+import { audio, haptic, loadPref, savePref, unlockOnFirstGesture } from "./audio";
+import { $, avatar, esc, fly, keepAwake, reducedMotion, toast } from "./ui";
 
 export function mountPhone(root: HTMLElement, code: string, name: string) {
   document.body.className = "mode-phone";
@@ -12,6 +13,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
     <header class="ph-top">
       <div class="ph-me" id="ph-me"></div>
       <div class="ph-room">Room <b>${esc(code)}</b></div>
+      <button class="icon-btn" id="ph-sound" aria-label="Phone sounds on/off">🔊</button>
       <button class="icon-btn" id="ph-menu" aria-label="Host controls" hidden>⚙︎</button>
     </header>
     <section class="ph-status" id="ph-status"></section>
@@ -45,6 +47,13 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
   let prevHandIds = new Set<number>();
   let wasMyTurn = false;
   let firstSync = true;
+  let soundOn = loadPref("phoneSound", true);
+  unlockOnFirstGesture();
+  const syncSoundBtn = () => {
+    $("#ph-sound").textContent = soundOn ? "🔊" : "🔇";
+    audio.sfxEnabled = soundOn;
+  };
+  syncSoundBtn();
 
   const conn = connectRoom(code, { role: "player", pid, name }, {
     onState(snap) {
@@ -56,7 +65,8 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
       if (!me.playable.includes(selected ?? -1)) selected = null;
       const myTurn = state.turnId === pid;
       if (myTurn && !wasMyTurn && !firstSync) {
-        vibrate([60, 40, 60]);
+        haptic("turn");
+        audio.turn();
         flashTurn();
       }
       wasMyTurn = myTurn;
@@ -66,7 +76,9 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
     },
     onError(m) {
       toast(m, "error");
-      vibrate(120);
+      haptic("error");
+      audio.error();
+      resetDragged();
     },
     onFatal(m) {
       root.innerHTML = `<div class="fatal"><div class="logo">Oh<span>No!</span></div><p>${esc(m)}</p><a class="btn btn-primary" href="/">Back</a></div>`;
@@ -83,7 +95,14 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
   $("#btn-draw").addEventListener("click", () => send({ t: "draw" }));
   $("#btn-ohno").addEventListener("click", () => {
     send({ t: "ohno" });
-    vibrate(30);
+    haptic("ohno");
+    audio.ohno(true);
+  });
+  $("#ph-sound").addEventListener("click", () => {
+    soundOn = !soundOn;
+    savePref("phoneSound", soundOn);
+    syncSoundBtn();
+    if (soundOn) audio.tick();
   });
   $("#btn-alt").addEventListener("click", () => {
     if (me?.canPass) send({ t: "pass" });
@@ -105,34 +124,99 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
     if (act) hostAction(act);
   });
 
-  $("#hand").addEventListener("click", (e) => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>(".card");
-    if (!el || !me || !state) return;
+  /**
+   * Try to play a card. `confirm` = this is the deliberate gesture (second tap or a swipe).
+   * Returns true if a play was sent.
+   */
+  function attempt(el: HTMLElement, confirm: boolean): boolean {
+    if (!me || !state) return false;
     const id = Number(el.dataset.id);
     const card = me.hand.find((c) => c.id === id);
-    if (!card) return;
+    if (!card) return false;
     if (state.turnId !== pid) {
       toast(`Hang on — it's ${playerName(state.turnId)}'s turn.`);
-      return;
+      return false;
     }
     if (!me.playable.includes(id)) {
-      el.animate([{ transform: "translateX(0)" }, { transform: "translateX(-6px)" }, { transform: "translateX(6px)" }, { transform: "translateX(0)" }], { duration: 220 });
+      el.animate([{ translate: "0" }, { translate: "-6px" }, { translate: "6px" }, { translate: "0" }], { duration: 220 });
+      haptic("error");
+      audio.error();
       toast(state.pendingDraw ? `Stack a draw card or take +${state.pendingDraw}.` : me.drawnCardId !== null ? "Play the card you drew, or keep it." : "That one doesn't match.");
-      return;
+      return false;
     }
-    if (selected !== id) {
+    if (!confirm) {
       selected = id;
+      haptic("select");
+      audio.tick();
       renderHand();
-      return;
+      return false;
     }
-    // second tap: play it
     if (card.color === "wild") {
+      selected = id;
       wildPending = id;
       openSheet("color-sheet");
-    } else {
-      send({ t: "play", cardId: id });
+      return false;
     }
+    send({ t: "play", cardId: id });
+    return true;
+  }
+
+  const hand = $("#hand");
+  let suppressClick = false;
+  hand.addEventListener("click", (e) => {
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
+    const el = (e.target as HTMLElement).closest<HTMLElement>(".card");
+    if (el) attempt(el, selected === Number(el.dataset.id));
   });
+
+  // Swipe a card up (toward the TV) to play it.
+  let drag: { el: HTMLElement; x0: number; y0: number; pointer: number; active: boolean } | null = null;
+  hand.addEventListener("pointerdown", (e) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>(".card");
+    if (el && e.isPrimary) drag = { el, x0: e.clientX, y0: e.clientY, pointer: e.pointerId, active: false };
+  });
+  window.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.pointer) return;
+    const dx = e.clientX - drag.x0;
+    const dy = e.clientY - drag.y0;
+    if (!drag.active) {
+      if (dy > -12 || Math.abs(dy) < Math.abs(dx)) return;
+      drag.active = true;
+      drag.el.classList.add("dragging");
+    }
+    const lift = Math.min(0, dy);
+    drag.el.style.transform = `translate(${dx * 0.6}px, ${lift}px) rotate(${dx / 14}deg) scale(1.08)`;
+    drag.el.classList.toggle("will-play", lift < -swipeDistance());
+  });
+  const endDrag = (e: PointerEvent) => {
+    if (!drag || e.pointerId !== drag.pointer) return;
+    const d = drag;
+    drag = null;
+    if (!d.active) return;
+    suppressClick = true;
+    setTimeout(() => (suppressClick = false), 350);
+    d.el.classList.remove("dragging", "will-play");
+    const far = e.type === "pointerup" && e.clientY - d.y0 < -swipeDistance();
+    if (far && attempt(d.el, true)) {
+      d.el.classList.add("sent"); // stays where the finger let go until the play lands
+      haptic("play");
+      return;
+    }
+    d.el.style.transform = "";
+  };
+  window.addEventListener("pointerup", endDrag);
+  window.addEventListener("pointercancel", endDrag);
+  const swipeDistance = () => Math.min(110, hand.clientHeight * 0.16);
+
+  function resetDragged() {
+    hand.querySelectorAll<HTMLElement>(".card.sent").forEach((el) => {
+      el.classList.remove("sent");
+      el.style.transform = "";
+    });
+  }
 
   window.addEventListener("resize", () => layoutHand());
 
@@ -193,7 +277,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
           ? `<b>Your turn!</b> Stack a draw card or take +${s.pendingDraw}`
           : me.drawnCardId !== null
             ? `<b>You drew a playable card.</b> Play it or keep it`
-            : `<b>Your turn!</b> Tap a card, then tap again to play`;
+            : `<b>Your turn!</b> Swipe a card up to play it (or tap twice)`;
       } else if (turnP) msg = `${avatar(turnP, "xs")} <b>${esc(turnP.name)}</b>'s turn`;
     }
     $("#ph-status").innerHTML =
@@ -209,7 +293,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
       : turnP && !turnP.connected && turnP.id !== pid && s.phase === "playing"
         ? `<button class="btn btn-ghost wide skip-offline" data-act="skip">${esc(turnP.name)}'s phone disconnected — skip their turn</button>`
         : "";
-    if (vul && prev?.vulnerable !== s.vulnerable) vibrate(40);
+    if (vul && prev?.vulnerable !== s.vulnerable) haptic("select");
 
     renderHand();
     renderActions();
@@ -254,6 +338,10 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
     hand.replaceChildren(
       ...sorted.map((card) => {
         let el = existing.get(card.id);
+        if (el && !el.classList.contains("dragging")) {
+          el.style.transform = "";
+          el.classList.remove("sent");
+        }
         if (!el) {
           el = cardEl(card, "hand-card");
           if (!prevHandIds.has(card.id) && prevHandIds.size) fresh.push(el);
@@ -265,7 +353,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
         el.classList.toggle("just-drew", m.drawnCardId === card.id);
         el.setAttribute("role", "button");
         el.setAttribute("aria-label", `${shortLabel(card)}${playable ? ", playable" : ""}`);
-        el.dataset.hint = selected === card.id ? (card.color === "wild" ? "Tap to pick color" : "Tap to play") : "";
+        el.dataset.hint = selected === card.id ? (card.color === "wild" ? "Tap to pick color" : "Tap or swipe up") : "";
         return el;
       }),
     );
@@ -303,6 +391,19 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
   }
 
   function animateOut(events: GameEvent[]) {
+    for (const e of events) {
+      if (e.type === "play" && e.pid === pid) {
+        const v = e.card.value;
+        audio.cardPlay(v === "draw2" || v === "wild4" ? "draw" : v === "wild" ? "wild" : "normal");
+      }
+      if (e.type === "draw" && e.pid === pid && e.count && e.reason !== "join") audio.draw(e.count);
+      if (e.type === "caught" && e.pid === pid) {
+        audio.caught();
+        haptic("caught");
+      }
+      if (e.type === "caught" && e.by === pid) audio.pop();
+      if (e.type === "roundOver" && e.winner === pid) audio.fanfare();
+    }
     if (reducedMotion()) return;
     for (const e of events) {
       if (e.type === "play" && e.pid === pid) {
@@ -327,6 +428,14 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
     el.textContent = "Your turn!";
     document.body.append(el);
     setTimeout(() => el.remove(), 1300);
+  }
+
+  function tvAudioHtml(s: PublicState) {
+    const seg = (key: keyof Settings, label: string) =>
+      `<div class="setting"><span>${label}</span><div class="seg">${[["true", "On"], ["false", "Off"]]
+        .map(([v, t]) => `<button data-act="set" data-key="${key}" data-val="${v}" class="${String(s.settings[key]) === v ? "on" : ""}">${t}</button>`)
+        .join("")}</div></div>`;
+    return `<div class="settings">${seg("tvMusic", "Music on the TV")}${seg("tvSounds", "Sound effects on the TV")}</div>`;
   }
 
   function settingsHtml(s: PublicState) {
@@ -395,6 +504,9 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
     const cur = s.players.find((p) => p.id === s.turnId);
     $("#host-sheet").innerHTML = `
       <h3>Host controls</h3>
+      <h4>TV sound</h4>
+      ${tvAudioHtml(s)}
+      <h4>Rules</h4>
       ${s.phase !== "playing" ? settingsHtml(s) : `<p class="muted small">Rules can be changed between rounds.</p>`}
       <h4>Players</h4>
       <div class="host-players">${s.players
