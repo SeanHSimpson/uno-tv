@@ -3,13 +3,27 @@
 // - Chopin's Nocturne Op. 9 No. 2, Grieg's "In the Hall of the Mountain King" (his own
 //   piano version) and Petzold's Minuet in G come from the Mutopia Project's free MIDI
 //   files, converted to note lists in ./music (see the credits at the top of each file).
+// - More from the Mutopia Project (all public domain except the Canon, CC BY 3.0): Joplin's
+//   The Entertainer and Maple Leaf Rag, Mozart's Rondo alla Turca and Eine kleine Nachtmusik,
+//   Sousa's The Stars and Stripes Forever, Beethoven's Für Elise, Debussy's Clair de Lune,
+//   Satie's Gymnopédie No. 1 and Pachelbel's Canon (the melody line, with the famous
+//   ground bass and its chords added here).
 // - Korobeiniki is a short Russian folk tune (the whole song is 8 bars), so it gets a
 //   hand-written arrangement: four verses with harmony, an octave lift and the
 //   traditional speed-up on every repeat.
 
+import { ALLA_TURCA } from "./music/allaTurca";
+import { CANON } from "./music/canon";
+import { CLAIR_DE_LUNE } from "./music/clairDeLune";
+import { ENTERTAINER } from "./music/entertainer";
+import { FUR_ELISE } from "./music/furElise";
+import { GYMNOPEDIE } from "./music/gymnopedie";
+import { MAPLE_LEAF } from "./music/mapleLeaf";
 import { MINUET } from "./music/minuet";
 import { MOUNTAIN_KING } from "./music/mountainKing";
+import { NACHTMUSIK } from "./music/nachtmusik";
 import { NOCTURNE } from "./music/nocturne";
+import { STARS_STRIPES } from "./music/starsStripes";
 
 export type Voice = "lead" | "harmony" | "bass" | "shaker";
 export type MusicEvent = { beat: number; dur: number; midi: number; voice: Voice; vel: number };
@@ -28,12 +42,12 @@ type Score = { bpm: number; unitsPerBeat: number; length: number; notes: number[
 const VOICES: Voice[] = ["lead", "harmony", "bass"];
 
 /** Turn a converted score into events, optionally replaying [from, to) beat sections (for repeats). */
-function fromScore(score: Score, sections?: [number, number][]) {
+function fromScore(score: Score, sections?: [number, number][], gain = 1) {
   const all: MusicEvent[] = [];
   const u = score.unitsPerBeat;
   for (let i = 0; i < score.notes.length; i += 5) {
     const [start, dur, midi, voice, vel] = score.notes.slice(i, i + 5) as [number, number, number, number, number];
-    all.push({ beat: start / u, dur: dur / u, midi, voice: VOICES[voice]!, vel: vel / 127 });
+    all.push({ beat: start / u, dur: dur / u, midi, voice: VOICES[voice]!, vel: Math.min(1, (vel / 127) * gain) });
   }
   const parts = sections ?? [[0, score.length / u]];
   const events: MusicEvent[] = [];
@@ -122,6 +136,30 @@ function korobeiniki() {
   return { events, length: at + 4 };
 }
 
+/** Pachelbel's Canon: the melody from Mutopia over the eight-note ground bass, two beats a note. */
+function canon() {
+  const { events, length } = fromScore(CANON);
+  // D  A  Bm  F#m  G  D  G  A  (bass note, then the chord's third and fifth)
+  const GROUND: [number, number, number][] = [
+    [50, 66, 69],
+    [45, 61, 64],
+    [47, 62, 66],
+    [42, 57, 61],
+    [43, 59, 62],
+    [38, 54, 57],
+    [43, 59, 62],
+    [45, 61, 64],
+  ];
+  for (let beat = 0, i = 0; beat < length; beat += 2, i++) {
+    const [bass, third, fifth] = GROUND[i % 8]!;
+    events.push({ beat, dur: 1.9, midi: bass, voice: "bass", vel: 0.75 });
+    events.push({ beat, dur: 0.9, midi: third, voice: "harmony", vel: 0.45 });
+    events.push({ beat: beat + 1, dur: 0.9, midi: fifth, voice: "harmony", vel: 0.4 });
+  }
+  events.sort((a, b) => a.beat - b.beat);
+  return { events, length };
+}
+
 // ---------- the playlist ----------
 
 export const SONGS: Song[] = [
@@ -134,5 +172,14 @@ export const SONGS: Song[] = [
     // The score repeats each half: A A B B.
     build: () => fromScore(MINUET, [[0, 48], [0, 48], [48, 96], [48, 96]]),
   },
+  { name: "The Entertainer", mode: "game", bpm: ENTERTAINER.bpm, build: () => fromScore(ENTERTAINER) },
+  { name: "Maple Leaf Rag", mode: "game", bpm: MAPLE_LEAF.bpm, build: () => fromScore(MAPLE_LEAF) },
+  { name: "Rondo alla Turca", mode: "game", bpm: ALLA_TURCA.bpm, build: () => fromScore(ALLA_TURCA) },
+  { name: "Eine kleine Nachtmusik", mode: "game", bpm: NACHTMUSIK.bpm, build: () => fromScore(NACHTMUSIK) },
+  { name: "The Stars and Stripes Forever", mode: "game", bpm: STARS_STRIPES.bpm, build: () => fromScore(STARS_STRIPES) },
   { name: "Nocturne Op. 9 No. 2", mode: "calm", bpm: NOCTURNE.bpm, build: () => fromScore(NOCTURNE) },
+  { name: "Clair de Lune", mode: "calm", bpm: CLAIR_DE_LUNE.bpm, build: () => fromScore(CLAIR_DE_LUNE, undefined, 1.6) },
+  { name: "Für Elise", mode: "calm", bpm: FUR_ELISE.bpm, build: () => fromScore(FUR_ELISE) },
+  { name: "Gymnopédie No. 1", mode: "calm", bpm: GYMNOPEDIE.bpm, build: () => fromScore(GYMNOPEDIE, undefined, 1.35) },
+  { name: "Canon in D", mode: "calm", bpm: CANON.bpm, build: canon },
 ];

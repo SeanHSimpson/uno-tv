@@ -103,7 +103,7 @@ class AudioEngine {
     g.setValueAtTime(0, now + 0.05);
     g.linearRampToValueAtTime(this.level(), now + 1.5);
     this.playlist = SONGS.filter((x) => x.mode === mode);
-    this.songIdx = mode === "game" ? Math.floor(Math.random() * this.playlist.length) : 0;
+    this.songIdx = Math.floor(Math.random() * this.playlist.length);
     this.loops = 0;
     this.compiled = compile(this.playlist[this.songIdx]!);
     this.cursor = 0;
@@ -391,6 +391,48 @@ class AudioEngine {
       this.noiseHit(t, 0.5, 5000, 0.4, "bandpass", out, 700);
       this.noiseHit(t + 0.12, 0.6, 2500, 0.18, "lowpass", out, 400);
     });
+  }
+
+  /** Euchre: a loon's wail across the lake (someone got euchred). */
+  loon() {
+    this.sfx((t, out) => {
+      const ctx = this.ctx!;
+      const wail = (start: number, from: number, to: number, len: number, vol: number) => {
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, start);
+        g.gain.exponentialRampToValueAtTime(vol, start + 0.18);
+        g.gain.setValueAtTime(vol, start + len - 0.35);
+        g.gain.exponentialRampToValueAtTime(0.0001, start + len);
+        g.connect(out);
+        const o = ctx.createOscillator();
+        o.type = "sine";
+        o.frequency.setValueAtTime(from, start);
+        o.frequency.exponentialRampToValueAtTime(to, start + 0.35);
+        o.frequency.setValueAtTime(to, start + len * 0.7);
+        o.frequency.exponentialRampToValueAtTime(to * 0.94, start + len);
+        // A slow, wobbly vibrato makes it sound like a bird rather than a whistle.
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = 5.5;
+        const depth = ctx.createGain();
+        depth.gain.value = to * 0.012;
+        lfo.connect(depth).connect(o.frequency);
+        const h = ctx.createGain();
+        h.gain.value = 0.18;
+        const o2 = ctx.createOscillator();
+        o2.type = "triangle";
+        o2.frequency.setValueAtTime(from * 2, start);
+        o2.frequency.exponentialRampToValueAtTime(to * 2, start + 0.35);
+        o.connect(g);
+        o2.connect(h).connect(g);
+        for (const x of [o, o2, lfo]) {
+          x.start(start);
+          x.stop(start + len + 0.05);
+        }
+      };
+      wail(t, 520, 780, 1.1, 0.22);
+      wail(t + 1.05, 700, 1040, 1.3, 0.2);
+    });
+    this.duck(2.6, 0.2);
   }
 
   /** A single music-box note (Hush plays one per card, pitched by its number). */
