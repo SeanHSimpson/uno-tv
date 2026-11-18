@@ -2,6 +2,7 @@
 
 import { canAdd, findContract, type PCard } from "../../../shared/games/rummy/cards";
 import type { RummyEvent, RummyPrivate, RummyPublic } from "../../../shared/games/rummy/engine";
+import { selectionHint } from "../../../shared/games/rummy/hint";
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
 import { pcardEl, pcardHtml, shortCard } from "../../playingCards";
@@ -27,6 +28,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     </section>
     <section class="rm-mayibar" id="rm-mayibar" hidden><button class="btn btn-ghost wide" id="rm-mayi"></button></section>
     <main class="hand rm-hand" id="rm-hand" aria-label="Your hand"></main>
+    <p class="rm-hint" id="rm-hint" hidden></p>
     <footer class="rm-actions" id="rm-actions">
       <button class="btn btn-ghost rm-sort" id="rm-sort">Sort: rank</button>
       <button class="btn btn-primary" id="rm-lay" hidden></button>
@@ -133,13 +135,19 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
           : `<b>Your turn.</b> Select cards for your contract to lay down, or pick one card to discard.`;
     else msg = turnP ? `${avatar(turnP, "xs")} <b>${esc(turnP.name)}</b>'s turn` : "";
     $("#rm-status").innerHTML = `
-      <div class="rm-chip"><small>Round ${s.round}/${s.rounds}</small><b>${esc(s.contractText)}</b>${m.down ? `<span class="rm-down">✓ You're down</span>` : ""}</div>
-      <div class="rm-msg">${msg}</div>`;
+      <div class="rm-status-text">
+        <div class="rm-chip"><small>Round ${s.round}/${s.rounds}</small><b>${esc(s.contractText)}</b>${m.down ? `<span class="rm-down">✓ You're down</span>` : ""}</div>
+        <div class="rm-msg">${msg}</div>
+      </div>
+      <div class="rm-ph-discard" aria-label="Top of the discard pile">
+        ${s.discardTop ? pcardHtml(s.discardTop, "rm-ph-top") : `<div class="rm-ph-empty">Empty</div>`}
+        <small>Discard · ${s.stockCount} in deck</small>
+      </div>`;
 
     $("#rm-drawbar").hidden = !m.canDraw;
     const takeBtn = $("#rm-draw-discard") as HTMLButtonElement;
     takeBtn.disabled = !s.discardTop;
-    takeBtn.innerHTML = s.discardTop ? `Take ${pcardHtml(s.discardTop, "rm-inline")}` : "Discard pile empty";
+    takeBtn.innerHTML = s.discardTop ? `Take the ${shortCard(s.discardTop)}` : "Discard pile empty";
     $("#rm-mayibar").hidden = !m.canMayI;
     $("#rm-mayi").innerHTML = s.discardTop ? `🙋 May I? Take the ${shortCard(s.discardTop)} (+1 penalty card, ${m.buysLeft} left)` : "";
 
@@ -162,8 +170,20 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     dis.hidden = !playing || cards.length !== 1;
     dis.disabled = cards.length === 1 && cards[0]!.id === m.tookFromDiscard && m.hand.length > 1;
     $("#rm-sort").textContent = `Sort: ${sortBy}`;
+
+    // Say what the selection makes, so a greyed-out "Lay down" is never a mystery.
+    const hintEl = $("#rm-hint");
+    const hint = !m.down && s.phase === "playing" ? selectionHint(cards, s.contract, { final: s.finalRound, handSize: m.hand.length }) : null;
+    hintEl.hidden = !hint;
+    if (hint) {
+      hintEl.textContent = hint.text;
+      hintEl.classList.toggle("ok", hint.ok);
+    }
     renderResults();
+    // The hint and buttons change how much room the hand has: size the cards last.
+    layoutHand();
   }
+
 
   function sorted(cards: PCard[]) {
     const rankOf = (c: PCard) => c.rank || 99;
@@ -193,8 +213,10 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   function layoutHand() {
     if (!me) return;
     const n = Math.max(1, me.hand.length);
-    const W = hand.clientWidth - 8;
-    const H = hand.clientHeight - 8;
+    // Measure the space inside the padding (selected cards also lift a little).
+    const cs = getComputedStyle(hand);
+    const W = hand.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8;
+    const H = hand.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 14;
     const gap = n > 12 ? 4 : 6;
     let best = { w: 0, cols: 1 };
     for (let cols = 1; cols <= n; cols++) {
