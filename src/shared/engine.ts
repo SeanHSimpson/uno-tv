@@ -124,6 +124,19 @@ function requireHost(s: GameState, pid: string) {
 }
 
 /** Add a new player or mark a returning one as connected. Joining mid-round deals a fresh hand. */
+const BOT_NAMES = ["Robo Rita", "Bitsy", "Sir Beeps", "Clanky", "Pixel", "Gizmo", "Dot Matrix", "Sprocket", "Widget"];
+
+/** Host adds a computer player. Joining mid-round deals them in like anyone else. */
+export function addBot(s: GameState, by: string, rng: Rng = Math.random): GameEvent[] {
+  requireHost(s, by);
+  const used = new Set(s.players.map((p) => p.name));
+  const name = BOT_NAMES.find((n) => !used.has(n)) ?? `Bot ${s.players.length + 1}`;
+  const pid = `bot-${Math.floor(rng() * 1e9).toString(36)}-${s.players.length}`;
+  const events = joinPlayer(s, pid, name, rng);
+  s.players.find((p) => p.id === pid)!.bot = true;
+  return events;
+}
+
 export function joinPlayer(s: GameState, pid: string, rawName: unknown, rng: Rng = Math.random): GameEvent[] {
   const events: GameEvent[] = [];
   const existing = s.players.find((p) => p.id === pid);
@@ -158,7 +171,7 @@ export function joinPlayer(s: GameState, pid: string, rawName: unknown, rng: Rng
 
 export function setConnected(s: GameState, pid: string, connected: boolean): GameEvent[] {
   const p = s.players.find((x) => x.id === pid);
-  if (!p) return [];
+  if (!p || p.bot) return [];
   // Empty seats in the lobby just disappear; during a game we keep the hand for when they come back.
   if (!connected && s.phase === "lobby") return removePlayer(s, pid, false);
   p.connected = connected;
@@ -177,7 +190,8 @@ export function removePlayer(s: GameState, pid: string, kicked: boolean, rng: Rn
   const [p] = s.players.splice(idx, 1);
   const events: GameEvent[] = [{ type: "left", pid, kicked }];
   if (s.vulnerable === pid) s.vulnerable = null;
-  if (s.hostId === pid) s.hostId = s.players.find((x) => x.connected)?.id ?? s.players[0]?.id ?? null;
+  // The host role only ever passes to a person, never a bot.
+  if (s.hostId === pid) s.hostId = s.players.find((x) => x.connected && !x.bot)?.id ?? s.players.find((x) => !x.bot)?.id ?? null;
   if (s.phase !== "playing") return events;
 
   // Return their cards to the deck.
@@ -562,6 +576,7 @@ export function publicView(s: GameState): PublicState {
       calledOhNo: p.calledOhNo,
       lastPlayed: p.lastPlayed,
       hue: p.hue,
+      bot: !!p.bot,
     })),
     discard: s.discard.slice(-6),
     color: s.color,

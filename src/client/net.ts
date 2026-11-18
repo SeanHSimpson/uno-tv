@@ -14,12 +14,70 @@ export interface RoomHandlers {
   onStatus(connected: boolean): void;
 }
 
+const PING_EVERY = 15_000; // keeps phone carriers / home routers from dropping an idle socket
+const DEAD_AFTER = 40_000; // no message (not even a pong) for this long = the socket is silently dead
+const BANNER_DELAY = 2_500; // don't flash "Reconnecting…" for blips that heal on their own
+
 export function connectRoom(code: string, query: Record<string, string>, h: RoomHandlers) {
-  const ws = new PartySocket({ host: location.host, party: "room", room: code, query });
+  const ws = new PartySocket({
+    host: location.host,
+    party: "room",
+    room: code,
+    query,
+    // Retry fast: a family game shouldn't wait 10s+ for a backoff after a phone wakes up.
+    minReconnectionDelay: 250,
+    maxReconnectionDelay: 3_000,
+    reconnectionDelayGrowFactor: 1.5,
+    connectionTimeout: 6_000,
+  });
   let dead = false;
-  ws.addEventListener("open", () => h.onStatus(true));
-  ws.addEventListener("close", () => !dead && h.onStatus(false));
+  let lastHeard = Date.now();
+  let bannerTimer = 0;
+
+  ws.addEventListener("open", () => {
+    lastHeard = Date.now();
+    clearTimeout(bannerTimer);
+    bannerTimer = 0;
+    h.onStatus(true);
+  });
+  ws.addEventListener("close", () => {
+    if (dead || bannerTimer) return;
+    bannerTimer = window.setTimeout(() => {
+      bannerTimer = 0;
+      if (!dead && ws.readyState !== WebSocket.OPEN) h.onStatus(false);
+    }, BANNER_DELAY);
+  });
+
+  // Heartbeat: the server answers "ping" with "pong" without waking the Durable Object.
+  const heartbeat = window.setInterval(() => {
+    if (dead) return;
+    if (ws.readyState === WebSocket.OPEN) {
+      if (Date.now() - lastHeard > DEAD_AFTER) ws.reconnect();
+      else ws.send("ping");
+    }
+  }, PING_EVERY);
+
+  // Phones suspend pages when the screen locks; when they come back, check right away.
+  const revive = () => {
+    if (dead || document.visibilityState !== "visible") return;
+    if (ws.readyState !== WebSocket.OPEN) {
+      ws.reconnect();
+      return;
+    }
+    // The socket may look open but have died while asleep: ping, and reconnect if nothing answers.
+    const sent = Date.now();
+    ws.send("ping");
+    setTimeout(() => {
+      if (!dead && lastHeard < sent) ws.reconnect();
+    }, 3_000);
+  };
+  document.addEventListener("visibilitychange", revive);
+  window.addEventListener("online", revive);
+  window.addEventListener("pageshow", revive);
+
   ws.addEventListener("message", (e) => {
+    lastHeard = Date.now();
+    if (e.data === "pong") return;
     let msg: ServerMessage;
     try {
       msg = JSON.parse(e.data);
@@ -29,19 +87,27 @@ export function connectRoom(code: string, query: Record<string, string>, h: Room
     if (msg.t === "state") h.onState(msg);
     else if (msg.t === "error") h.onError(msg.message);
     else if (msg.t === "fatal") {
-      dead = true;
-      ws.close();
+      shutdown();
       h.onFatal(msg.message);
     }
   });
+
+  function shutdown() {
+    dead = true;
+    clearInterval(heartbeat);
+    clearTimeout(bannerTimer);
+    document.removeEventListener("visibilitychange", revive);
+    window.removeEventListener("online", revive);
+    window.removeEventListener("pageshow", revive);
+    ws.close();
+  }
+
   return {
     send(m: ClientMessage) {
+      // PartySocket queues messages while reconnecting and sends them once it's back.
       ws.send(JSON.stringify(m));
     },
-    close() {
-      dead = true;
-      ws.close();
-    },
+    close: shutdown,
   };
 }
 

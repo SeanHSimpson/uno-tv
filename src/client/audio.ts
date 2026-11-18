@@ -1,134 +1,12 @@
-// All sound in OhNo! is synthesized live with the Web Audio API: no audio files,
-// nothing to license. Music is our own music-box arrangements of public-domain
-// melodies (Korobeiniki — Russian folk song; Grieg's "In the Hall of the Mountain
-// King"; Petzold/Bach "Minuet in G").
+// All sound in OhNo! is synthesized live with the Web Audio API: no audio files.
+// The music (complete public-domain pieces) lives in ./songs.ts.
 
-type Song = {
-  name: string;
-  /** "calm" plays in the lobby / between rounds, "game" during play. */
-  mode: "calm" | "game";
-  /** Beats per minute, where a beat is the note value used in `melody` durations. */
-  bpm: number;
-  beatsPerBar: number;
-  /** Beats per chord (defaults to one chord per bar). */
-  chordBeats?: number;
-  shaker?: boolean;
-  /** "NOTE+OCTAVE/beats" tokens, "r/beats" for rests. Sharps as #, flats as b. */
-  melody: string;
-  /** Chords in order, one per `chordBeats`, e.g. "Am", "E", "Eb", "Cm". */
-  chords: string[];
-};
+import { SONGS, type MusicEvent, type Song } from "./songs";
 
-export const SONGS: Song[] = [
-  {
-    name: "Korobeiniki",
-    mode: "game",
-    shaker: true,
-    bpm: 144,
-    beatsPerBar: 4,
-    melody: `
-      E5/1 B4/.5 C5/.5 D5/1 C5/.5 B4/.5 | A4/1 A4/.5 C5/.5 E5/1 D5/.5 C5/.5 | B4/1.5 C5/.5 D5/1 E5/1 | C5/1 A4/1 A4/1 r/1 |
-      r/.5 D5/1 F5/.5 A5/1 G5/.5 F5/.5 | E5/1.5 C5/.5 E5/1 D5/.5 C5/.5 | B4/1 B4/.5 C5/.5 D5/1 E5/1 | C5/1 A4/1 A4/1 r/1 |
-      E6/1 B5/.5 C6/.5 D6/1 C6/.5 B5/.5 | A5/1 A5/.5 C6/.5 E6/1 D6/.5 C6/.5 | B5/1.5 C6/.5 D6/1 E6/1 | C6/1 A5/1 A5/1 r/1 |
-      r/.5 D6/1 F6/.5 A6/1 G6/.5 F6/.5 | E6/1.5 C6/.5 E6/1 D6/.5 C6/.5 | B5/1 B5/.5 C6/.5 D6/1 E6/1 | C6/1 A5/1 A5/2`,
-    chords: ["Am", "Am", "E", "Am", "Dm", "C", "E", "Am", "Am", "Am", "E", "Am", "Dm", "C", "E", "Am"],
-  },
-  {
-    name: "In the Hall of the Mountain King",
-    mode: "game",
-    shaker: true,
-    bpm: 132,
-    beatsPerBar: 4,
-    melody: `
-      A4/.5 B4/.5 C5/.5 D5/.5 E5/.5 C5/.5 E5/1 | D#5/.5 B4/.5 D#5/1 D5/.5 A#4/.5 D5/1 |
-      A4/.5 B4/.5 C5/.5 D5/.5 E5/.5 C5/.5 E5/.5 A5/.5 | G5/.5 E5/.5 C5/.5 E5/.5 G5/2 |
-      A4/.5 B4/.5 C5/.5 D5/.5 E5/.5 C5/.5 E5/1 | D#5/.5 B4/.5 D#5/1 D5/.5 A#4/.5 D5/1 |
-      A4/.5 B4/.5 C5/.5 D5/.5 E5/.5 C5/.5 E5/.5 A5/.5 | G5/.5 E5/.5 C5/.5 E5/.5 A5/2`,
-    chords: ["Am", "E", "Am", "C", "Am", "E", "Am", "Am"],
-  },
-  {
-    name: "Minuet in G",
-    mode: "game",
-    shaker: true,
-    bpm: 126,
-    beatsPerBar: 3,
-    melody: `
-      D5/1 G4/.5 A4/.5 B4/.5 C5/.5 | D5/1 G4/1 G4/1 | E5/1 C5/.5 D5/.5 E5/.5 F#5/.5 | G5/1 G4/1 G4/1 |
-      C5/1 D5/.5 C5/.5 B4/.5 A4/.5 | B4/1 C5/.5 B4/.5 A4/.5 G4/.5 | F#4/1 G4/.5 A4/.5 B4/.5 G4/.5 | A4/3 |
-      D5/1 G4/.5 A4/.5 B4/.5 C5/.5 | D5/1 G4/1 G4/1 | E5/1 C5/.5 D5/.5 E5/.5 F#5/.5 | G5/1 G4/1 G4/1 |
-      C5/1 D5/.5 C5/.5 B4/.5 A4/.5 | B4/1 C5/.5 B4/.5 A4/.5 G4/.5 | A4/1 B4/.5 A4/.5 G4/.5 F#4/.5 | G4/3`,
-    chords: ["G", "G", "C", "G", "C", "G", "D", "D", "G", "G", "C", "G", "C", "G", "D", "G"],
-  },
-  {
-    // Chopin, Nocturne in E-flat, Op. 9 No. 2: opening theme (bars 1-4, played twice).
-    // Beats here are eighth notes (12/8 time). Notes checked against the Mutopia
-    // Project edition (from G. Schirmer, 1881).
-    name: "Nocturne Op. 9 No. 2",
-    mode: "calm",
-    bpm: 120,
-    beatsPerBar: 12,
-    chordBeats: 6,
-    melody: `
-      G5/4 F5/1 G5/1 F5/3 Eb5/2 Bb4/1 |
-      G5/2 C5/1 C6/2 G5/1 Bb5/3 Ab5/2 G5/1 |
-      F5/3 G5/2 D5/1 Eb5/3 C5/3 |
-      Bb4/1 D6/1 C6/1 Bb5/.5 Ab5/.5 G5/.5 Ab5/.5 C5/.5 D5/.5 Eb5/3 r/2 Bb4/1 |
-      G5/4 F5/1 G5/1 F5/3 Eb5/2 Bb4/1 |
-      G5/2 C5/1 C6/2 G5/1 Bb5/3 Ab5/2 G5/1 |
-      F5/3 G5/2 D5/1 Eb5/3 C5/3 |
-      Bb4/1 D6/1 C6/1 Bb5/.5 Ab5/.5 G5/.5 Ab5/.5 C5/.5 D5/.5 Eb5/5 r/1`,
-    chords: ["Eb", "Eb", "Eb", "Ab", "Bb", "Cm", "Bb", "Eb", "Eb", "Eb", "Eb", "Ab", "Bb", "Cm", "Bb", "Eb"],
-  },
-];
+export { SONGS };
 
-const NOTE_INDEX: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-function midiOf(note: string): number {
-  const m = /^([A-G])([#b]?)(-?\d)$/.exec(note);
-  if (!m) throw new Error(`bad note ${note}`);
-  const acc = m[2] === "#" ? 1 : m[2] === "b" ? -1 : 0;
-  return 12 * (Number(m[3]) + 1) + NOTE_INDEX[m[1]!]! + acc;
-}
 const hz = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
-
-/** Chord name -> [bass root midi (C2..B2), third interval]. */
-function chord(name: string): [number, number] {
-  const m = /^([A-G][#b]?)(m?)$/.exec(name);
-  if (!m) throw new Error(`bad chord ${name}`);
-  let root = midiOf(`${m[1]}2`);
-  if (root < 36) root += 12;
-  return [root, m[2] ? 3 : 4];
-}
-
-type MusicEvent = { beat: number; dur: number; midi: number; voice: "lead" | "bass" | "shaker" };
-
-function compile(song: Song) {
-  const events: MusicEvent[] = [];
-  let beat = 0;
-  for (const tok of song.melody.split(/\s+/)) {
-    if (!tok || tok === "|") continue;
-    const [n, d] = tok.split("/");
-    const dur = Number(d);
-    if (n !== "r") events.push({ beat, dur, midi: midiOf(n!), voice: "lead" });
-    beat += dur;
-  }
-  const span = song.chordBeats ?? song.beatsPerBar;
-  const length = song.chords.length * span;
-  song.chords.forEach((name, i) => {
-    const [root, third] = chord(name);
-    const at = i * span;
-    // Bass: oom-pah for the lively tunes, a rolling arpeggio for the nocturne.
-    const pattern =
-      span === 6
-        ? [root, root + 7, root + 12 + third, root + 19, root + 12 + third, root + 7]
-        : span === 3
-          ? [root, root + 7, root + 7]
-          : [root, root + 7, root + 12, root + 7];
-    pattern.forEach((m, k) => events.push({ beat: at + k, dur: span === 6 ? 1.8 : 0.9, midi: m, voice: "bass" }));
-    if (song.shaker) for (let k = 0; k < span; k++) events.push({ beat: at + k + 0.5, dur: 0.1, midi: 0, voice: "shaker" });
-  });
-  events.sort((a, b) => a.beat - b.beat);
-  return { events, length: Math.max(length, beat) };
-}
+const compile = (song: Song) => song.build();
 
 // ---------------------------------------------------------------------------
 
@@ -260,10 +138,6 @@ class AudioEngine {
     const song = this.playlist[this.songIdx]!;
     const spb = 60 / (song.bpm * (song.mode === "game" ? this.tempo : 1));
     const horizon = ctx.currentTime + 0.25;
-    if (this.cursorTime < ctx.currentTime - 0.5) {
-      // Tab was asleep; don't try to catch up on missed notes.
-      this.cursorTime = ctx.currentTime + 0.05;
-    }
     for (let guard = 0; guard < 200; guard++) {
       const ev = this.compiled.events[this.cursor];
       if (!ev) {
@@ -271,14 +145,22 @@ class AudioEngine {
         this.cursorTime += (this.compiled.length - this.cursorBeat) * spb;
         this.cursorBeat = 0;
         this.cursor = 0;
-        if (++this.loops % 2 === 0 && this.playlist.length > 1) {
+        // Songs are complete pieces now: move on to the next one after each play.
+        if (++this.loops > 0 && this.playlist.length > 1) {
           this.songIdx = (this.songIdx + 1) % this.playlist.length;
           this.compiled = compile(this.playlist[this.songIdx]!);
           this.cursorTime += 60 / song.bpm; // a breath between songs
         }
         return;
       }
-      const t = this.cursorTime + (ev.beat - this.cursorBeat) * spb;
+      let t = this.cursorTime + (ev.beat - this.cursorBeat) * spb;
+      if (t < ctx.currentTime - 0.3) {
+        // We fell behind (the tab was asleep): pick up from this note instead of
+        // blasting every missed one. (Only when a note is actually late; rests are fine.)
+        this.cursorTime = ctx.currentTime + 0.05;
+        this.cursorBeat = ev.beat;
+        t = this.cursorTime;
+      }
       if (t > horizon) return;
       this.playEvent(ev, t, ev.dur * spb);
       this.cursorTime = t;
@@ -288,8 +170,16 @@ class AudioEngine {
   }
 
   private playEvent(ev: MusicEvent, t: number, dur: number) {
-    if (ev.voice === "lead") this.musicBox(hz(ev.midi), t, Math.max(0.35, dur * 1.6), 0.22, this.musicBus);
-    else if (ev.voice === "bass") this.bass(hz(ev.midi), t, dur, this.musicBus);
+    // Keep the score's dynamics (soft passages stay soft) without letting quiet notes vanish.
+    const dyn = 0.6 + 0.4 * ev.vel;
+    // A music box can't sound very low notes, so lift anything too deep up by octaves.
+    const lift = (m: number, floor: number) => {
+      while (m < floor) m += 12;
+      return m;
+    };
+    if (ev.voice === "lead") this.musicBox(hz(lift(ev.midi, 57)), t, Math.min(4, Math.max(0.35, dur * 1.6)), 0.22 * dyn, this.musicBus);
+    else if (ev.voice === "harmony") this.musicBox(hz(lift(ev.midi, 50)), t, Math.min(3, Math.max(0.3, dur * 1.4)), 0.1 * dyn, this.musicBus);
+    else if (ev.voice === "bass") this.bass(hz(lift(ev.midi, 36)), t, Math.min(3, Math.max(0.2, dur)), this.musicBus, dyn);
     else this.noiseHit(t, 0.05, 7000, 0.025, "highpass", this.musicBus);
   }
 
@@ -325,13 +215,16 @@ class AudioEngine {
     this.osc("triangle", f * 3, t, len * 0.15, k);
   }
 
-  private bass(f: number, t: number, len: number, dest: AudioNode) {
+  private bass(f: number, t: number, len: number, dest: AudioNode, dyn = 1) {
     const lp = this.ctx!.createBiquadFilter();
     lp.type = "lowpass";
     lp.frequency.value = 600;
     lp.connect(dest);
-    const g = this.env(t, 0.2, 0.01, len, lp);
+    const g = this.env(t, 0.2 * dyn, 0.01, len, lp);
     this.osc("triangle", f, t, len, g);
+    // A soft octave overtone so the bass is still heard on small TV speakers.
+    const o = this.env(t, 0.07 * dyn, 0.01, len * 0.6, lp);
+    this.osc("sine", f * 2, t, len * 0.6, o);
   }
 
   private noiseHit(t: number, len: number, freq: number, vol: number, type: BiquadFilterType, dest: AudioNode, sweepTo?: number) {

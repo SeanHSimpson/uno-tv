@@ -1735,3 +1735,65 @@ kbd {
   transition: none;
   opacity: 0.9;
 }
+
+/* ---------- skip / direction clarity ---------- */
+.tv-round .dir {
+  color: var(--amber);
+}
+.skip-stamp {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  translate: -50% -50%;
+  font-size: 11vmin;
+  line-height: 1;
+  color: var(--danger);
+  text-shadow: 0 0 2vmin rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 9;
+  animation: stamp 1.6s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
+}
+@keyframes stamp {
+  0% {
+    scale: 2.4;
+    opacity: 0;
+    rotate: -30deg;
+  }
+  18% {
+    scale: 1;
+    opacity: 0.95;
+    rotate: -12deg;
+  }
+  80% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.1;
+  }
+}
+
+/* ---------- bots ---------- */
+.bot-tag {
+  font-family: var(--font-ui);
+  font-size: 0.6em;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(255, 246, 230, 0.15);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.1em 0.55em;
+  vertical-align: middle;
+}
+.remove-bot {
+  border: 0;
+  background: rgba(255, 246, 230, 0.15);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  font-size: 16px;
+  font-weight: 800;
+  margin-left: 2px;
+}

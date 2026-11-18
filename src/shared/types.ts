@@ -50,6 +50,8 @@ export interface PlayerState {
   lastPlayed: Card | null;
   /** index into the avatar palette, stable for the lifetime of the room */
   hue: number;
+  /** Computer player, run by the room itself. */
+  bot?: boolean;
 }
 
 export interface GameState {
@@ -101,6 +103,7 @@ export interface PublicPlayer {
   calledOhNo: boolean;
   lastPlayed: Card | null;
   hue: number;
+  bot: boolean;
 }
 
 export interface PublicState {
@@ -150,7 +153,8 @@ export type ClientMessage =
   | { t: "skip" }
   | { t: "nextRound" }
   | { t: "lobby" }
-  | { t: "rename"; name: string };
+  | { t: "rename"; name: string }
+  | { t: "addBot" };
 
 export type ServerMessage =
   | { t: "state"; state: PublicState; me: PrivateState | null; events: GameEvent[] }

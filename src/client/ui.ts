@@ -15,8 +15,8 @@ export function $(sel: string, root: ParentNode = document): HTMLElement {
 const AVATAR = ["#e98a5b", "#7fb7a4", "#c98bb9", "#e6c069", "#8aa6d6", "#d98282", "#9bc47c", "#b49a7a", "#73b6c9", "#d6a2e0"];
 export const avatarColor = (hue: number) => AVATAR[hue % AVATAR.length]!;
 
-export function avatar(p: Pick<PublicPlayer, "name" | "hue">, cls = ""): string {
-  const initial = esc([...p.name.trim()][0]?.toUpperCase() ?? "?");
+export function avatar(p: Pick<PublicPlayer, "name" | "hue"> & { bot?: boolean }, cls = ""): string {
+  const initial = p.bot ? "🤖" : esc([...p.name.trim()][0]?.toUpperCase() ?? "?");
   return `<span class="avatar ${cls}" style="--av:${avatarColor(p.hue)}">${initial}</span>`;
 }
 
@@ -44,13 +44,33 @@ export function vibrate(pattern: number | number[]) {
 }
 
 /** Keep the screen awake (TVs dimming mid-game is the worst). */
-export async function keepAwake() {
-  try {
-    const wl = await (navigator as Navigator & { wakeLock?: { request(t: "screen"): Promise<unknown> } }).wakeLock?.request("screen");
-    if (wl) document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && keepAwake(), { once: true });
-  } catch {
-    /* not allowed / unsupported */
-  }
+type WakeLockSentinelLike = { addEventListener(t: "release", f: () => void): void };
+let wakeLock: WakeLockSentinelLike | null = null;
+let wakeLockPending = false;
+
+/**
+ * Keep the screen on, so phones don't lock (and drop their connection) between turns.
+ * The browser releases the lock whenever the page is hidden, and some browsers only
+ * grant it after a tap, so we ask again on every return and on taps until it sticks.
+ */
+export function keepAwake() {
+  const request = async () => {
+    if (wakeLock || wakeLockPending || document.visibilityState !== "visible") return;
+    const api = (navigator as Navigator & { wakeLock?: { request(t: "screen"): Promise<WakeLockSentinelLike> } }).wakeLock;
+    if (!api) return;
+    wakeLockPending = true;
+    try {
+      wakeLock = await api.request("screen");
+      wakeLock.addEventListener("release", () => (wakeLock = null));
+    } catch {
+      /* not allowed yet (needs a tap) or unsupported */
+    } finally {
+      wakeLockPending = false;
+    }
+  };
+  request();
+  document.addEventListener("visibilitychange", request);
+  window.addEventListener("pointerdown", request, { passive: true });
 }
 
 /** Fly a clone of `el` from one rect to another (Web Animations API). */
