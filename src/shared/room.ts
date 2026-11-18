@@ -254,7 +254,11 @@ export function runBot(r: RoomState, pid: string, rng: Rng): Result {
     } catch (err) {
       if (!(err instanceof GameError)) throw err;
       // Never let a confused bot stall the table.
-      res.game.push(...(m.botRescue?.(r.game, pid, ctx(r, pid, rng)) ?? []));
+      try {
+        res.game.push(...(m.botRescue?.(r.game, pid, ctx(r, pid, rng)) ?? []));
+      } catch (again) {
+        if (!(again instanceof GameError)) throw again;
+      }
       break;
     }
   }
