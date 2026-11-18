@@ -1,14 +1,12 @@
-// Pure game engine. No I/O — the Durable Object owns persistence and sockets.
+// OhNo! rules engine. Pure: no I/O. The room (Durable Object) owns persistence and sockets.
 // Every mutating function returns the events it produced (for client animation)
 // or throws a GameError with a friendly message.
 
+import { cleanAvatar, cleanName, fail, GameError, MAX_PLAYERS, shuffle, type Rng } from "../../common";
 import {
-  AVATARS,
   COLORS,
   DEFAULT_SETTINGS,
   HAND_SIZE,
-  MAX_NAME,
-  MAX_PLAYERS,
   type Card,
   type Color,
   type GameEvent,
@@ -19,13 +17,7 @@ import {
   type Settings,
 } from "./types";
 
-export class GameError extends Error {}
-
-export type Rng = () => number;
-
-const fail = (msg: string): never => {
-  throw new GameError(msg);
-};
+export { cleanName, GameError, shuffle, type Rng };
 
 // ---------- deck ----------
 
@@ -46,14 +38,6 @@ export function createDeck(rng: Rng = Math.random): Card[] {
     deck.push({ id: id++, color: "wild", value: "wild4" });
   }
   return shuffle(deck, rng);
-}
-
-export function shuffle<T>(arr: T[], rng: Rng = Math.random): T[] {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [arr[i], arr[j]] = [arr[j]!, arr[i]!];
-  }
-  return arr;
 }
 
 export function cardPoints(card: Card): number {
@@ -88,14 +72,6 @@ export function newGame(code: string): GameState {
   };
 }
 
-export function cleanName(raw: unknown): string {
-  const name = String(raw ?? "")
-    .replace(/[\u0000-\u001f<>]/g, "")
-    .trim()
-    .slice(0, MAX_NAME);
-  return name || "Player";
-}
-
 const top = (s: GameState): Card | undefined => s.discard[s.discard.length - 1];
 const current = (s: GameState): PlayerState | undefined => s.players[s.turn];
 const indexOf = (s: GameState, pid: string) => s.players.findIndex((p) => p.id === pid);
@@ -115,8 +91,6 @@ export function updateSettings(s: GameState, by: string, patch: Partial<Settings
     next.targetScore = patch.targetScore;
   if (typeof patch.catchPenalty === "number" && patch.catchPenalty >= 1 && patch.catchPenalty <= 4)
     next.catchPenalty = Math.floor(patch.catchPenalty);
-  if (typeof patch.tvMusic === "boolean") next.tvMusic = patch.tvMusic;
-  if (typeof patch.tvSounds === "boolean") next.tvSounds = patch.tvSounds;
   s.settings = next;
 }
 
@@ -125,32 +99,6 @@ function requireHost(s: GameState, pid: string) {
 }
 
 /** Add a new player or mark a returning one as connected. Joining mid-round deals a fresh hand. */
-const BOT_NAMES = ["Robo Rita", "Bitsy", "Sir Beeps", "Clanky", "Pixel", "Gizmo", "Dot Matrix", "Sprocket", "Widget"];
-
-/** Host adds a computer player. Joining mid-round deals them in like anyone else. */
-export function addBot(s: GameState, by: string, rng: Rng = Math.random): GameEvent[] {
-  requireHost(s, by);
-  const used = new Set(s.players.map((p) => p.name));
-  const name = BOT_NAMES.find((n) => !used.has(n)) ?? `Bot ${s.players.length + 1}`;
-  const pid = `bot-${Math.floor(rng() * 1e9).toString(36)}-${s.players.length}`;
-  const events = joinPlayer(s, pid, name, rng);
-  s.players.find((p) => p.id === pid)!.bot = true;
-  return events;
-}
-
-/** Only accept pictures from our list (anything else is ignored). */
-export function cleanAvatar(raw: unknown): string | undefined {
-  return typeof raw === "string" && (AVATARS as readonly string[]).includes(raw) ? raw : undefined;
-}
-
-export function setAvatar(s: GameState, pid: string, raw: unknown): GameEvent[] {
-  const p = player(s, pid);
-  const avatar = cleanAvatar(raw);
-  if (!avatar) fail("Pick one of the pictures.");
-  p.avatar = avatar;
-  return [];
-}
-
 export function joinPlayer(s: GameState, pid: string, rawName: unknown, rng: Rng = Math.random, rawAvatar?: unknown): GameEvent[] {
   const events: GameEvent[] = [];
   const existing = s.players.find((p) => p.id === pid);
@@ -192,12 +140,6 @@ export function setConnected(s: GameState, pid: string, connected: boolean): Gam
   if (!connected && s.phase === "lobby") return removePlayer(s, pid, false);
   p.connected = connected;
   return [];
-}
-
-export function kick(s: GameState, by: string, pid: string, rng: Rng = Math.random): GameEvent[] {
-  requireHost(s, by);
-  if (pid === by) fail("You can't kick yourself.");
-  return removePlayer(s, pid, true, rng);
 }
 
 export function removePlayer(s: GameState, pid: string, kicked: boolean, rng: Rng = Math.random): GameEvent[] {
@@ -261,19 +203,6 @@ export function nextRound(s: GameState, by: string, rng: Rng = Math.random): Gam
   if (s.gameWinner) return startGame(s, by, rng);
   if (s.players.length < 2) fail("You need at least 2 players.");
   return dealRound(s, rng);
-}
-
-export function backToLobby(s: GameState, by: string): GameEvent[] {
-  requireHost(s, by);
-  s.phase = "lobby";
-  resetTable(s);
-  s.roundWinner = null;
-  s.gameWinner = null;
-  s.round = 0;
-  for (const p of s.players) p.score = 0;
-  // Drop anyone who left while we were playing.
-  const gone = s.players.filter((p) => !p.connected).map((p) => p.id);
-  return gone.flatMap((pid) => removePlayer(s, pid, false));
 }
 
 function dealRound(s: GameState, rng: Rng): GameEvent[] {

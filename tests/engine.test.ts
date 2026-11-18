@@ -7,7 +7,6 @@ import {
   GameError,
   isPlayable,
   joinPlayer,
-  kick,
   newGame,
   pass,
   play,
@@ -19,8 +18,8 @@ import {
   startGame,
   take,
   updateSettings,
-} from "../src/shared/engine";
-import type { Card, GameState } from "../src/shared/types";
+} from "../src/shared/games/ohno/engine";
+import type { Card, GameState } from "../src/shared/games/ohno/types";
 
 /** Small deterministic PRNG so tests are repeatable. */
 function seeded(seed = 42) {
@@ -306,12 +305,11 @@ describe("scoring", () => {
 });
 
 describe("host controls & departures", () => {
-  it("kicking the current player hands the turn to the next one", () => {
+  it("removing the current player hands the turn to the next one", () => {
     const s = table([[c("red", "1")], [c("red", "2")], [c("red", "3")]], c("red", "9"));
     s.turn = 1; // p1's turn
-    kick(s, "p0", "p1");
+    removePlayer(s, "p1", true);
     expect(publicView(s).turnId).toBe("p2");
-    expect(() => kick(s, "p2", "p0")).toThrow(/host/);
     removePlayer(s, "p2", false);
     expect(s.phase).toBe("lobby"); // only one left
   });

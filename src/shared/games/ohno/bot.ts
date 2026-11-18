@@ -3,12 +3,12 @@
 // get to catch it) and occasionally catches people who forget.
 
 import { isPlayable, type Rng } from "./engine";
-import { COLORS, type Card, type ClientMessage, type Color, type GameState } from "./types";
+import { COLORS, type Card, type Color, type GameState, type OhNoAction } from "./types";
 
-export function botTurn(s: GameState, pid: string, rng: Rng = Math.random): ClientMessage[] {
+export function botTurn(s: GameState, pid: string, rng: Rng = Math.random): OhNoAction[] {
   const me = s.players.find((p) => p.id === pid);
   if (!me || s.phase !== "playing" || s.players[s.turn]?.id !== pid) return [];
-  const moves: ClientMessage[] = [];
+  const moves: OhNoAction[] = [];
 
   // Catch someone who forgot to call OhNo!
   if (s.vulnerable && s.vulnerable !== pid && rng() < 0.5) moves.push({ t: "catch", target: s.vulnerable });
@@ -24,7 +24,7 @@ export function botTurn(s: GameState, pid: string, rng: Rng = Math.random): Clie
 
   if (s.drawnCardId !== null) {
     const drawn = playable.find((c) => c.id === s.drawnCardId);
-    moves.push(...(drawn ? playCard(me.hand, drawn, rng) : [{ t: "pass" } as ClientMessage]));
+    moves.push(...(drawn ? playCard(me.hand, drawn, rng) : [{ t: "pass" } as OhNoAction]));
     return moves;
   }
 
@@ -36,8 +36,8 @@ export function botTurn(s: GameState, pid: string, rng: Rng = Math.random): Clie
   return moves;
 }
 
-function playCard(hand: Card[], card: Card, rng: Rng): ClientMessage[] {
-  const moves: ClientMessage[] = [];
+function playCard(hand: Card[], card: Card, rng: Rng): OhNoAction[] {
+  const moves: OhNoAction[] = [];
   // Usually remembers to call OhNo! on the second-to-last card. Usually.
   if (hand.length === 2 && rng() < 0.8) moves.push({ t: "ohno" });
   moves.push({ t: "play", cardId: card.id, color: card.color === "wild" ? pickColor(hand, card, rng) : undefined });

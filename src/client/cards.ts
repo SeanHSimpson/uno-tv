@@ -3,7 +3,7 @@
 // Each colour also carries a little shape (heart / sun / leaf / drop) so it's
 // readable for colour-blind players.
 
-import type { Card, CardColor, Color } from "../shared/types";
+import type { Card, CardColor, Color } from "../shared/games/ohno/types";
 
 export const COLOR_NAMES: Record<Color, string> = { red: "Red", yellow: "Yellow", green: "Green", blue: "Blue" };
 
