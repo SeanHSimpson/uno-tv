@@ -1,4 +1,4 @@
-// Shared types between the Durable Object (server) and the browser (client).
+// OhNo! types, shared by the rules engine (server) and the OhNo! views (browser).
 
 export const COLORS = ["red", "yellow", "green", "blue"] as const;
 export type Color = (typeof COLORS)[number];
@@ -23,10 +23,6 @@ export interface Settings {
   targetScore: number;
   /** Cards drawn when caught without calling OhNo!. */
   catchPenalty: number;
-  /** Background music on the TV (host can toggle from their phone). */
-  tvMusic: boolean;
-  /** Sound effects on the TV. */
-  tvSounds: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -34,8 +30,6 @@ export const DEFAULT_SETTINGS: Settings = {
   drawUntilPlayable: false,
   targetScore: 0,
   catchPenalty: 2,
-  tvMusic: true,
-  tvSounds: true,
 };
 
 export type Phase = "lobby" | "playing" | "roundOver";
@@ -141,37 +135,15 @@ export interface PrivateState {
   drawnCardId: number | null;
 }
 
-// ---- Wire protocol ----
-
-export type ClientMessage =
+/** What a phone can ask OhNo! to do. */
+export type OhNoAction =
   | { t: "play"; cardId: number; color?: Color }
   | { t: "draw" }
   | { t: "pass" }
   | { t: "take" }
   | { t: "ohno" }
   | { t: "catch"; target: string }
-  | { t: "start" }
-  | { t: "settings"; settings: Partial<Settings> }
-  | { t: "kick"; pid: string }
   | { t: "skip" }
-  | { t: "nextRound" }
-  | { t: "lobby" }
-  | { t: "rename"; name: string }
-  | { t: "addBot" }
-  | { t: "avatar"; avatar: string };
+  | { t: "nextRound" };
 
-export type ServerMessage =
-  | { t: "state"; state: PublicState; me: PrivateState | null; events: GameEvent[] }
-  | { t: "error"; message: string }
-  | { t: "fatal"; message: string };
-
-export const MAX_PLAYERS = 10;
-
-/** Pictures players can pick for their seat. */
-export const AVATARS = [
-  "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐸", "🐵",
-  "🐰", "🐱", "🐶", "🦉", "🐧", "🐢", "🦄", "🐙",
-  "🦔", "🐝", "🐞", "🦋", "🐳", "🦖", "🌻", "🍄",
-] as const;
 export const HAND_SIZE = 7;
-export const MAX_NAME = 14;

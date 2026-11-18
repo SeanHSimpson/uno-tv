@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { botTurn } from "../src/shared/bot";
-import * as engine from "../src/shared/engine";
-import type { ClientMessage, GameState } from "../src/shared/types";
+import { botTurn } from "../src/shared/games/ohno/bot";
+import * as engine from "../src/shared/games/ohno/engine";
+import type { GameState, OhNoAction } from "../src/shared/games/ohno/types";
 
 function seeded(seed: number) {
   let t = seed >>> 0;
@@ -13,7 +13,7 @@ function seeded(seed: number) {
   };
 }
 
-function apply(s: GameState, pid: string, m: ClientMessage, rng: () => number) {
+function apply(s: GameState, pid: string, m: OhNoAction, rng: () => number) {
   switch (m.t) {
     case "play":
       return engine.play(s, pid, m.cardId, m.color, rng);
@@ -32,40 +32,16 @@ function apply(s: GameState, pid: string, m: ClientMessage, rng: () => number) {
   }
 }
 
-describe("bots", () => {
-  it("host can add bots; they get names, a bot flag, and are never made host", () => {
-    const s = engine.newGame("X");
-    engine.joinPlayer(s, "human", "Sean");
-    expect(() => engine.addBot(s, "nobody")).toThrow(/host/);
-    engine.addBot(s, "human");
-    engine.addBot(s, "human");
-    const view = engine.publicView(s);
-    expect(view.players.filter((p) => p.bot).map((p) => p.name)).toEqual(["Robo Rita", "Bitsy"]);
-    engine.setConnected(s, s.players[1]!.id, false); // bots never drop
-    expect(s.players).toHaveLength(3);
-    engine.removePlayer(s, "human", false);
-    expect(s.hostId).toBeNull();
-  });
-
-  it("one human + bots can start a game", () => {
-    const s = engine.newGame("X");
-    engine.joinPlayer(s, "human", "Sean");
-    engine.addBot(s, "human");
-    engine.startGame(s, "human", seeded(3));
-    expect(s.phase).toBe("playing");
-  });
-
-  it("bots play hundreds of full games without an illegal move", () => {
+describe("OhNo! bots", () => {
+  it("play hundreds of full games without an illegal move", () => {
     for (let seed = 1; seed <= 300; seed++) {
       const rng = seeded(seed);
       const s = engine.newGame("SIM");
-      engine.joinPlayer(s, "host", "Host");
-      for (let i = 0; i < 1 + (seed % 5); i++) engine.addBot(s, "host", rng);
-      engine.updateSettings(s, "host", { stacking: seed % 2 === 0, drawUntilPlayable: seed % 3 === 0 });
-      engine.removePlayer(s, "host", false); // bots only from here on
-      s.hostId = "host";
-      if (s.players.length < 2) continue;
-      engine.startGame(s, "host", rng);
+      const n = 2 + (seed % 5);
+      for (let i = 0; i < n; i++) engine.joinPlayer(s, `bot${i}`, `Bot ${i}`, rng);
+      for (const p of s.players) p.bot = true;
+      engine.updateSettings(s, "bot0", { stacking: seed % 2 === 0, drawUntilPlayable: seed % 3 === 0 });
+      engine.startGame(s, "bot0", rng);
       let turns = 0;
       while (s.phase === "playing" && turns++ < 2000) {
         const pid = s.players[s.turn]!.id;

@@ -1,11 +1,8 @@
 import PartySocket from "partysocket";
-import type { ClientMessage, GameEvent, PrivateState, PublicState, ServerMessage } from "../shared/types";
+import type { ClientMessage, ServerMessage } from "../shared/room";
 
-export interface Snapshot {
-  state: PublicState;
-  me: PrivateState | null;
-  events: GameEvent[];
-}
+/** Everything a screen needs after each change in the room. */
+export type Snapshot = Extract<ServerMessage, { t: "state" }>;
 
 export interface RoomHandlers {
   onState(s: Snapshot): void;

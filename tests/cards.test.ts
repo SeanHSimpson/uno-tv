@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { joinPlayer, newGame, play, publicView } from "../src/shared/engine";
-import type { Card, GameState } from "../src/shared/types";
+import { joinPlayer, newGame, play, publicView } from "../src/shared/games/ohno/engine";
+import type { Card, GameState } from "../src/shared/games/ohno/types";
 
 let id = 5000;
 const c = (color: Card["color"], value: Card["value"]): Card => ({ id: id++, color, value });

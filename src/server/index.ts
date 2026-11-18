@@ -1,42 +1,42 @@
 import { getServerByName, routePartykitRequest, Server, type Connection, type ConnectionContext } from "partyserver";
-import { botTurn } from "../shared/bot";
-import * as engine from "../shared/engine";
-import { DEFAULT_SETTINGS, type ClientMessage, type GameEvent, type GameState, type ServerMessage } from "../shared/types";
+import { GameError } from "../shared/common";
+import * as R from "../shared/room";
 
 type ConnState = { role: "tv" } | { role: "player"; pid: string };
 
 const ROOM_ALPHABET = "BCDFGHJKLMNPQRSTVWXZ"; // consonants only: no accidental words, no 0/O 1/I mixups
 const ROOM_TTL_MS = 6 * 60 * 60 * 1000; // rooms are cleaned up after 6 idle hours
-const STORAGE_KEY = "game";
+const STORAGE_KEY = "room";
 const DISCONNECT_GRACE_MS = 8_000;
 
 /**
- * One Durable Object per room. It owns the authoritative game state and every
- * WebSocket in the room (TVs and phones). Hibernation keeps idle rooms free.
+ * One Durable Object per room. It owns the room (members, host, chosen game and that
+ * game's state) and every WebSocket in it (TVs and phones). Games plug in as modules
+ * (src/shared/games); this class only deals with sockets, storage and timing.
  */
 export class Room extends Server<Env> {
   static options = { hibernate: true };
 
-  game: GameState | null = null;
+  room: R.RoomState | null = null;
 
   async onStart() {
-    this.game = (await this.ctx.storage.get<GameState>(STORAGE_KEY)) ?? null;
-    // Rooms saved by an older version may be missing newer settings.
-    if (this.game) this.game.settings = { ...DEFAULT_SETTINGS, ...this.game.settings };
+    const saved = await this.ctx.storage.get<R.RoomState>(STORAGE_KEY);
+    this.room = saved?.version === 2 ? saved : null;
     // Heartbeats from phones/TVs are answered by the runtime itself, so they never wake a hibernating room.
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
 
   /** RPC from the Worker when a TV creates a room. Returns false if the code is taken. */
   async create(): Promise<boolean> {
-    if (this.game) return false;
-    this.game = engine.newGame(this.name);
+    if (this.room) return false;
+    await this.ctx.storage.delete("game"); // leftovers from the single-game version
+    this.room = R.newRoom(this.name);
     await this.save();
     return true;
   }
 
   async exists(): Promise<boolean> {
-    return this.game !== null;
+    return this.room !== null;
   }
 
   getConnectionTags(_c: Connection, ctx: ConnectionContext) {
@@ -46,14 +46,14 @@ export class Room extends Server<Env> {
 
   async onConnect(conn: Connection<ConnState>, ctx: ConnectionContext) {
     const url = new URL(ctx.request.url);
-    if (!this.game) {
+    if (!this.room) {
       this.send(conn, { t: "fatal", message: "That room doesn't exist. Check the code on the TV." });
       conn.close(4404, "no such room");
       return;
     }
     if (url.searchParams.get("role") === "tv") {
       conn.setState({ role: "tv" });
-      this.sync([], conn);
+      this.sync({ room: [], game: [] }, conn);
       this.scheduleBots(); // in case the room just woke up mid-game
       return;
     }
@@ -65,33 +65,38 @@ export class Room extends Server<Env> {
     }
     conn.setState({ role: "player", pid });
     try {
-      const events = engine.joinPlayer(this.game, pid, url.searchParams.get("name"), Math.random, url.searchParams.get("avatar"));
-      await this.commit(events);
+      await this.commit(R.join(this.room, pid, url.searchParams.get("name"), url.searchParams.get("avatar"), Math.random));
     } catch (err) {
-      this.send(conn, { t: "fatal", message: errorMessage(err) });
+      this.send(conn, { t: "fatal", message: err instanceof GameError ? err.message : "Couldn't join that room." });
       conn.close(4403, "rejected");
     }
   }
 
   async onMessage(conn: Connection<ConnState>, raw: string | ArrayBuffer | ArrayBufferView) {
-    const g = this.game;
+    const r = this.room;
     const st = conn.state;
-    if (!g || !st || raw === "ping") return;
-    let msg: ClientMessage;
+    if (!r || !st || raw === "ping") return;
+    let msg: R.ClientMessage;
     try {
       msg = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw as ArrayBuffer));
     } catch {
       return;
     }
-    // TVs are display-only, except they may start the game when the host taps Start there.
-    const pid = st.role === "player" ? st.pid : g.hostId;
-    if (!pid || (st.role === "tv" && msg.t !== "start" && msg.t !== "nextRound")) return;
-
     try {
-      const events = this.apply(g, pid, msg);
-      await this.commit(events);
+      let res: R.Result;
+      if (st.role === "tv") {
+        // TVs are mostly display-only: they may start the chosen game, or send a few
+        // game actions (like "next round") on the host's behalf.
+        if (msg?.t === "start" && r.hostId) res = R.start(r, r.hostId, Math.random);
+        else if (msg?.t === "game") res = R.tvAction(r, msg.action, Math.random);
+        else return;
+      } else {
+        res = R.handle(r, st.pid, msg, Math.random);
+        if (msg?.t === "kick") this.disconnectKicked(String(msg.pid));
+      }
+      await this.commit(res);
     } catch (err) {
-      if (err instanceof engine.GameError) this.send(conn, { t: "error", message: err.message });
+      if (err instanceof GameError) this.send(conn, { t: "error", message: err.message });
       else {
         console.error("room error", err);
         this.send(conn, { t: "error", message: "Something went wrong. Try again." });
@@ -99,66 +104,26 @@ export class Room extends Server<Env> {
     }
   }
 
-  private apply(g: GameState, pid: string, m: ClientMessage): GameEvent[] {
-    switch (m.t) {
-      case "play":
-        return engine.play(g, pid, Number(m.cardId), m.color);
-      case "draw":
-        return engine.draw(g, pid);
-      case "pass":
-        return engine.pass(g, pid);
-      case "take":
-        return engine.take(g, pid);
-      case "ohno":
-        return engine.callOhNo(g, pid);
-      case "catch":
-        return engine.catchPlayer(g, pid, String(m.target));
-      case "start":
-        return engine.startGame(g, pid);
-      case "nextRound":
-        return engine.nextRound(g, pid);
-      case "lobby":
-        return engine.backToLobby(g, pid);
-      case "settings":
-        engine.updateSettings(g, pid, m.settings ?? {});
-        return [];
-      case "kick": {
-        const events = engine.kick(g, pid, String(m.pid));
-        for (const c of this.getConnections<ConnState>("player")) {
-          if (c.state?.role === "player" && c.state.pid === m.pid) {
-            this.send(c, { t: "fatal", message: "The host removed you from the table." });
-            c.close(4001, "kicked");
-          }
-        }
-        return events;
+  private disconnectKicked(pid: string) {
+    if (this.room?.members.some((m) => m.id === pid)) return; // kick was refused
+    for (const c of this.getConnections<ConnState>("player")) {
+      if (c.state?.role === "player" && c.state.pid === pid) {
+        this.send(c, { t: "fatal", message: "The host removed you from the table." });
+        c.close(4001, "kicked");
       }
-      case "skip":
-        return engine.skipCurrent(g, pid);
-      case "addBot":
-        return engine.addBot(g, pid);
-      case "avatar":
-        return engine.setAvatar(g, pid, m.avatar);
-      case "rename": {
-        const p = g.players.find((x) => x.id === pid);
-        if (p) p.name = engine.cleanName(m.name);
-        return [];
-      }
-      default:
-        return [];
     }
   }
 
   async onClose(conn: Connection<ConnState>) {
-    const g = this.game;
     const st = conn.state;
-    if (!g || st?.role !== "player") return;
+    if (!this.room || st?.role !== "player") return;
     // Phones blip offline all the time (screen lock, Wi-Fi to mobile data). Give them a few
     // seconds to come back before the TV greys out their seat. The pending timer keeps the
     // room awake just long enough to check.
     const pid = st.pid;
     await new Promise((r) => setTimeout(r, DISCONNECT_GRACE_MS));
-    if (!this.game || this.isOnline(pid, conn.id)) return;
-    await this.commit(engine.setConnected(this.game, pid, false));
+    if (!this.room || this.isOnline(pid, conn.id)) return;
+    await this.commit(R.setConnected(this.room, pid, false, Math.random));
   }
 
   /** Is this player connected on any other socket (another tab, or a reconnect)? */
@@ -176,97 +141,68 @@ export class Room extends Server<Env> {
       await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS);
       return;
     }
-    this.game = null;
+    this.room = null;
     await this.ctx.storage.deleteAll();
   }
 
   private async save() {
-    await this.ctx.storage.put(STORAGE_KEY, this.game);
+    await this.ctx.storage.put(STORAGE_KEY, this.room);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS);
   }
 
-  private async commit(events: GameEvent[]) {
-    if (!this.game) return;
-    this.game.seq++;
+  private async commit(res: R.Result) {
+    if (!this.room) return;
+    this.room.seq++;
     await this.save();
-    this.sync(events);
+    this.sync(res);
     this.scheduleBots();
   }
 
   // ---------------- bots ----------------
-  // Bots live inside the room: after every change we check whether a bot should act,
-  // and if so do it after a human-feeling pause. (A pending timer keeps the room awake.)
+  // Bots live inside the room: after every change we ask the game whether a bot should
+  // act, and if so do it after a human-feeling pause. (A pending timer keeps the room awake.)
 
   private botTimer: ReturnType<typeof setTimeout> | null = null;
 
   private scheduleBots() {
     if (this.botTimer) clearTimeout(this.botTimer);
     this.botTimer = null;
-    const g = this.game;
-    if (!g || g.phase !== "playing") return;
-    const current = g.players[g.turn];
-    const someoneToCatch = g.vulnerable && g.players.some((p) => p.bot && p.id !== g.vulnerable);
-    let delay: number;
-    if (current?.bot) delay = 1100 + Math.random() * 1000;
-    else if (someoneToCatch && Math.random() < 0.55) delay = 2500 + Math.random() * 2500; // give humans a head start
-    else return;
+    if (!this.room) return;
+    const due = R.nextBot(this.room, Math.random);
+    if (!due) return;
     this.botTimer = setTimeout(() => {
       this.botTimer = null;
-      this.runBots().catch((err) => console.error("bot error", err));
-    }, delay);
-  }
-
-  private async runBots() {
-    const g = this.game;
-    if (!g || g.phase !== "playing") return;
-    const current = g.players[g.turn];
-    const events: GameEvent[] = [];
-    if (current?.bot) {
-      for (const msg of botTurn(g, current.id)) {
-        try {
-          events.push(...this.apply(g, current.id, msg));
-        } catch (err) {
-          // Shouldn't happen, but never let a confused bot stall the table.
-          console.error("bot move rejected", msg, err);
-          try {
-            events.push(...(g.drawnCardId !== null || g.pendingDraw ? engine.pass(g, current.id) : engine.draw(g, current.id)));
-          } catch {
-            events.push(...engine.skipCurrent(g, g.hostId ?? current.id));
-          }
-          break;
-        }
+      if (!this.room) return;
+      try {
+        const res = R.runBot(this.room, due.pid, Math.random);
+        this.commit(res).catch((err) => console.error("bot commit error", err));
+      } catch (err) {
+        console.error("bot error", err);
       }
-    } else if (g.vulnerable) {
-      const catcher = g.players.find((p) => p.bot && p.id !== g.vulnerable);
-      if (catcher) events.push(...engine.catchPlayer(g, catcher.id, g.vulnerable));
-    }
-    await this.commit(events);
+    }, due.delay);
   }
 
-  /** Send everyone the public state plus their own private hand. */
-  private sync(events: GameEvent[], only?: Connection<ConnState>) {
-    const g = this.game;
-    if (!g) return;
-    const pub = engine.publicView(g);
+  /** Send everyone the room, the game's public state, and their own private state. */
+  private sync(events: R.Result, only?: Connection<ConnState>) {
+    const r = this.room;
+    if (!r) return;
+    const room = R.roomView(r);
+    const pubGame = R.gameView(r, null);
     const targets = only ? [only] : this.getConnections<ConnState>();
     for (const c of targets) {
       const st = c.state;
-      const me = st?.role === "player" ? engine.privateView(g, st.pid) : null;
-      this.send(c, { t: "state", state: pub, me, events });
+      const game = st?.role === "player" ? R.gameView(r, st.pid) : pubGame;
+      this.send(c, { t: "state", room, game, events });
     }
   }
 
-  private send(c: Connection, msg: ServerMessage) {
+  private send(c: Connection, msg: R.ServerMessage) {
     try {
       c.send(JSON.stringify(msg));
     } catch {
       /* socket already gone */
     }
   }
-}
-
-function errorMessage(err: unknown) {
-  return err instanceof engine.GameError ? err.message : "Couldn't join that room.";
 }
 
 function newCode() {

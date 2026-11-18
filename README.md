@@ -1,14 +1,20 @@
-# OhNo!
+# OhNo! game night
 
-A cozy shed-your-hand card game for family game night. **The TV is the table; everyone's phone is their hand.**
+Cozy party games for one TV and a room full of phones. **The TV is the table; everyone's phone is their hand.**
 
 - Open the site on the TV → **Host on this screen** → a room code and QR code appear.
-- Everyone scans the QR code (or types the 4-letter code) on their phone and picks a name.
-- The first person to join is the **host** and deals from their phone (or press **Start / Enter** on the TV).
+- Everyone scans the QR code (or types the 4-letter code) on their phone and picks a name and a picture.
+- The first person to join is the **host**. They pick a game on their phone and start it (or press **Start / Enter** on the TV).
+- When a game ends, the host picks the next one. **Everyone stays in the same room**, so nobody has to rejoin.
 
-Runs entirely on Cloudflare: one Worker serves the frontend, and every room is a Durable Object that owns the game state and all of the room's WebSockets.
+| Game | Players | In one line |
+| --- | --- | --- |
+| 🃏 **OhNo!** | 2–10 | Match colors or symbols and empty your hand first. |
+| 🤫 **Hush** (co-op) | 2–6 | Play every number in rising order, together, without saying a word. |
 
-## How to play
+Runs entirely on Cloudflare: one Worker serves the frontend, and every room is a Durable Object that owns the room, the running game and all of its WebSockets.
+
+## OhNo!
 
 Match the top card by **color** or **symbol**, or play a **Wild**. The first person to empty their hand wins.
 
@@ -75,22 +81,43 @@ The host can tap **🤖 Add a bot player** in the lobby, or in ⚙︎ during a g
 - A quiet heartbeat every 15 seconds keeps routers and mobile carriers from closing idle connections. The room answers it without waking up, so it costs nothing.
 - If someone's phone is gone on their turn, anyone can tap "skip their turn".
 
+## Hush
+
+A cooperative game for 2–6 players, played in silence.
+
+- Cards go from **1 to 100**. On **level N** everyone gets **N** cards.
+- There are no turns and no talking. When it feels like your moment, play your **lowest** card: tap the big **Play** button, or swipe up on your cards. The whole table has to put every card down in rising order.
+- If you play while someone still holds a lower card, the team loses a ❤️ and those lower cards are thrown away.
+- ⭐ **Stars:** anyone can propose using one. When everyone holding cards agrees, each of them throws away their lowest card. Handy when the table is stuck.
+- Before each level everyone taps **Ready**, then there's a hushed "Shh…" and play begins.
+- **Rewards:** +⭐ after levels 3, 6 and 9; +❤️ after levels 4 and 8.
+- Clear the goal level to win. Auto means 10 levels with 2 players, 9 with 3, and 8 with 4 or more. The host can choose 6, 8, 10 or 12 instead.
+- On the TV, each card plays a music-box note pitched by its number, so a perfect level sounds like a rising melody. Cards also warm in color as the numbers rise.
+- Bots make good teammates. They wait longer the bigger the gap between the last card and their own lowest, like quietly counting up in your head. They never peek at anyone's cards.
+
 ## Project layout
 
 ```
-index.html               Vite entry (single page; routes by query string)
-public/                  favicon + web manifest
+index.html                 Vite entry (single page; routes by query string)
+public/                    favicon + web manifest
 src/
-  shared/
-    types.ts             Card / state / wire-protocol types (shared by client + server)
-    engine.ts            Pure rules engine: deal, play, draw, stacking, OhNo!, scoring, host actions
-    bot.ts               Computer player: picks a move from the table state
+  shared/                  Pure TypeScript, used by both server and browser, fully unit-tested
+    common.ts              Members, avatars, names, errors, shuffle
+    room.ts                The room: members, host, bots, game picking, settings, start/end, wire protocol
+    games/
+      types.ts             The GameModule contract every game implements
+      index.ts             The list of games
+      ohno/                OhNo! rules (engine.ts), bot (bot.ts), types, module.ts adapter
+      hush/                Hush rules + bot timing (engine.ts), module.ts adapter
   server/
-    index.ts             Worker entry + `Room` Durable Object (PartyServer, hibernating WebSockets)
+    index.ts               Worker entry + `Room` Durable Object (sockets, storage, bot timers)
   client/
-    main.ts              Home / join screens and routing
-    tv.ts                TV table: seats, piles, direction ring, animations, lobby, results, music
-    phone.ts             Phone hand: auto-fitting grid, swipe/tap to play, color picker, OhNo!/Catch, host sheet
+    main.ts                Home / join screens and routing
+    shell/tv.ts            TV shell: header, hub lobby (game picker + QR), music, mounts the running game
+    shell/phone.ts         Phone shell: lobby/game picker, host menu, picture picker, sound, mounts the game
+    games/<id>/tv.ts       Each game's TV view
+    games/<id>/phone.ts    Each game's phone view
+    games/index.ts         Which views belong to which game
     audio.ts             Synthesizer, music scheduler, sound effects, haptics
     songs.ts             The playlist (complete public-domain pieces + Korobeiniki arrangement)
     music/*.ts           Note lists converted from Mutopia Project MIDI files (credits inside)
@@ -98,9 +125,23 @@ src/
     net.ts               PartySocket connection, room API, player id
     ui.ts, fx.ts         Helpers: avatars, toasts, fly animation, confetti, wake lock
     styles.css           Theme
-tests/engine.test.ts     Rules tests, plus 200 simulated full games
+tests/                     Rules tests per game, room tests, and bot-only full games for every game
 wrangler.jsonc           Worker + Durable Object + static assets config
 ```
+
+## Adding a game
+
+1. **Rules:** create `src/shared/games/<id>/module.ts` exporting a `GameModule` (see `src/shared/games/types.ts`):
+   - `meta`: name, tagline, how to play, emoji, player count, music mood
+   - `settings` and `defaultSettings`: the lobby shows these as buttons and validates them for you
+   - `start`, `action`, `join`, `leave`, `sync`
+   - `publicView` (what the TV and everyone sees) and `privateView` (one player's secrets)
+   - `nextBot` and `botActions`, so people can play with bots
+   - `status`: playing, over, or abort
+   Keep it pure (no I/O) so it's easy to test.
+2. **Register it:** add it to `GAMES`/`GAME_ORDER` in `src/shared/games/index.ts` and add its id to `GameId`.
+3. **Screens:** create `src/client/games/<id>/tv.ts` and `phone.ts`. Each returns a `GameView` with `update` and `destroy`, plus optional `hostMenu`, `onEnter` and `onError`. Register them in `src/client/games/index.ts`. The shells already handle the lobby, host menu, avatars, sound, reconnecting and bots.
+4. **Tests:** rule tests, plus a "bots play it to the end" test through the room (see `tests/room.test.ts`).
 
 **How it fits together**
 

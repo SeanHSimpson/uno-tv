@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { joinPlayer, newGame, updateSettings } from "../src/shared/engine";
 import { KOROBEINIKI_BARS, SONGS } from "../src/client/songs";
 
 describe("music", () => {
@@ -46,15 +45,5 @@ describe("music", () => {
   it("has calm music for the lobby and lively music for play", () => {
     expect(SONGS.some((s) => s.mode === "calm")).toBe(true);
     expect(SONGS.filter((s) => s.mode === "game").length).toBeGreaterThanOrEqual(3);
-  });
-});
-
-describe("TV audio settings", () => {
-  it("host can toggle TV music and sounds", () => {
-    const s = newGame("X");
-    joinPlayer(s, "a", "Ann");
-    expect(s.settings.tvMusic).toBe(true);
-    updateSettings(s, "a", { tvMusic: false, tvSounds: false });
-    expect(s.settings).toMatchObject({ tvMusic: false, tvSounds: false });
   });
 });

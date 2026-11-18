@@ -1,31 +1,22 @@
-import QRCode from "qrcode";
-import type { Card, Color, GameEvent, PublicPlayer, PublicState } from "../shared/types";
-import { cardEl, COLOR_NAMES, shapeSvg, shortLabel } from "./cards";
-import { audio, loadPref, savePref, unlockOnFirstGesture } from "./audio";
-import { confetti } from "./fx";
-import { connectRoom, type Snapshot } from "./net";
-import { $, avatar, esc, fly, joinOrigin, keepAwake, reducedMotion, toast } from "./ui";
+// OhNo! on the TV: the table, seats, piles, animations and round results.
 
-export function mountTv(root: HTMLElement, code: string) {
-  const joinUrl = `${joinOrigin()}/?join=${code}`;
-  const prettyUrl = joinOrigin().replace(/^https?:\/\//, "");
-  document.body.className = "mode-tv";
-  root.innerHTML = `
-  <div class="tv">
-    <header class="tv-top">
-      <div class="logo">Oh<span>No!</span></div>
-      <div class="tv-round" id="tv-round"></div>
-      <button class="sound-btn" id="tv-sound" title="Sound on/off (M)" aria-label="Sound on/off">🔊</button>
-      <div class="tv-join">
-        <div class="qr qr-mini" id="qr-mini"></div>
-        <div class="tv-join-text"><small>Join at <b>${esc(prettyUrl)}</b></small><span class="code">${esc(code)}</span></div>
-      </div>
-    </header>
+import type { Card, Color, GameEvent, PublicPlayer, PublicState } from "../../../shared/games/ohno/types";
+import { audio } from "../../audio";
+import { cardEl, COLOR_NAMES, shapeSvg, shortLabel } from "../../cards";
+import { confetti } from "../../fx";
+import { $, avatar, esc, fly, reducedMotion } from "../../ui";
+import type { GameSnap, GameView, TvCtx } from "../types";
+
+export function ohnoTv(ctx: TvCtx): GameView {
+  const ac = new AbortController();
+  let alive = true;
+  ctx.el.innerHTML = `
+  <div class="ohno-tv">
     <main class="table-wrap" id="table-wrap">
       <div class="felt">
         <svg class="ring" id="ring" viewBox="-100 -100 200 200" aria-hidden="true">
           <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="currentColor"/></marker></defs>
-<g class="ring-flip"><g class="ring-spin">${[0, 1, 2, 3]
+          <g class="ring-flip"><g class="ring-spin">${[0, 1, 2, 3]
             .map((i) => `<path d="M ${arcPt(i * 90 + 12)} A 92 92 0 0 1 ${arcPt(i * 90 + 72)}" marker-end="url(#arrowhead)"/>`)
             .join("")}</g></g>
         </svg>
@@ -38,151 +29,32 @@ export function mountTv(root: HTMLElement, code: string) {
       </div>
       <div class="seats" id="seats"></div>
     </main>
-    <footer class="ticker" id="ticker"><div class="ticker-main" id="ticker-main">Waiting for players…</div><div class="ticker-sub" id="ticker-sub"></div></footer>
-
-    <section class="tv-lobby overlay" id="tv-lobby">
-      <div class="lobby-card">
-        <div class="lobby-left">
-          <div class="logo logo-xl">Oh<span>No!</span></div>
-          <p class="tagline">Grab your phone and pull up a chair.</p>
-          <ol class="steps">
-            <li>Scan the code with your phone camera</li>
-            <li>…or visit <b>${esc(prettyUrl)}</b> and enter <b class="code-inline">${esc(code)}</b></li>
-            <li>The first person to join is the host and starts the game</li>
-          </ol>
-          <div class="lobby-players" id="lobby-players"></div>
-          <div class="lobby-hint" id="lobby-hint"></div>
-          <button class="btn btn-primary btn-xl" id="tv-start" hidden>Start game</button>
-        </div>
-        <div class="lobby-right">
-          <div class="qr qr-big" id="qr-big"></div>
-          <div class="code code-xl">${esc(code)}</div>
-          <div class="lobby-rules" id="lobby-rules"></div>
-        </div>
-      </div>
-    </section>
-
+    <footer class="ticker" id="ticker"><div class="ticker-main" id="ticker-main"></div><div class="ticker-sub" id="ticker-sub"></div></footer>
     <section class="tv-results overlay" id="tv-results" hidden></section>
-    <div class="conn-lost" id="conn-lost" hidden>Reconnecting…</div>
-    <button class="tap-sound" id="tap-sound" hidden>🔈 Click anywhere for music &amp; sound</button>
   </div>`;
 
-  const qrOpts = { margin: 1, color: { dark: "#2b1d1a", light: "#fff6e6" } };
-  QRCode.toString(joinUrl, { ...qrOpts, type: "svg" }).then((svg) => {
-    $("#qr-big").innerHTML = svg;
-    $("#qr-mini").innerHTML = svg;
-  });
-
   let state: PublicState | null = null;
-  let lastSeq = -1;
   const seatEls = new Map<string, HTMLElement>();
   const names = (pid: string) => state?.players.find((p) => p.id === pid)?.name ?? "Someone";
+  window.addEventListener("resize", () => state && layoutSeats(state.players), { signal: ac.signal });
 
-  const conn = connectRoom(code, { role: "tv" }, {
-    onState(snap) {
-      const first = state === null;
-      state = snap.state;
-      render(snap);
-      if (!first && snap.state.seq !== lastSeq) animate(snap.events);
-      lastSeq = snap.state.seq;
-    },
-    onError: (m) => toast(m, "error"),
-    onFatal(m) {
-      root.innerHTML = `<div class="fatal"><div class="logo">Oh<span>No!</span></div><p>${esc(m)}</p><a class="btn btn-primary" href="/">Start over</a></div>`;
-    },
-    onStatus(ok) {
-      $("#conn-lost").hidden = ok;
-    },
-  });
-
-  // ---------------- audio ----------------
-  // Browsers only allow sound after someone clicks/taps the page. Hosting from the
-  // home page counts; after a refresh we show a small "click for sound" prompt.
-  let muted = loadPref("tvMute", false);
-  unlockOnFirstGesture();
-  audio.onStateChange(syncAudio);
-  const toggleMute = () => {
-    muted = !muted;
-    savePref("tvMute", muted);
-    audio.unlock();
-    syncAudio();
-  };
-  $("#tv-sound").addEventListener("click", toggleMute);
-  $("#tap-sound").addEventListener("click", () => audio.unlock());
-
-  function syncAudio() {
-    $("#tap-sound").hidden = audio.ready || muted;
-    $("#tv-sound").textContent = muted ? "🔇" : "🔊";
-    if (!state) return;
-    audio.sfxEnabled = !muted && state.settings.tvSounds;
-    const wanted = muted || !state.settings.tvMusic ? null : state.phase === "playing" ? "game" : "calm";
-    audio.setMusic(wanted);
-    // Like the classic falling-blocks games: the music speeds up when someone's on their last card.
-    audio.setTempo(state.phase === "playing" && state.players.some((p) => p.count === 1) ? 1.22 : 1);
+  function update(snap: GameSnap<PublicState>) {
+    state = snap.pub;
+    render(snap.pub);
+    if (!snap.first) animate(snap.events as GameEvent[]);
   }
-
-  function sound(e: GameEvent, delay: number) {
-    const at = (fn: () => void, extra = 0) => setTimeout(fn, delay + extra);
-    switch (e.type) {
-      case "play": {
-        const v = e.card.value;
-        const kind = v === "draw2" || v === "wild4" ? "draw" : v === "wild" ? "wild" : v === "skip" || v === "reverse" ? "action" : "normal";
-        at(() => audio.cardPlay(kind), 480);
-        break;
-      }
-      case "draw":
-        if (e.reason !== "join" && e.count) at(() => audio.draw(e.count));
-        break;
-      case "skip":
-        at(() => audio.skip());
-        break;
-      case "reverse":
-        at(() => audio.reverse());
-        break;
-      case "ohno":
-        audio.ohno();
-        break;
-      case "caught":
-        at(() => audio.caught());
-        break;
-      case "deal":
-      case "reshuffle":
-        at(() => audio.shuffle());
-        break;
-      case "joined":
-        audio.pop();
-        break;
-      case "roundOver":
-        at(() => audio.fanfare(), 700);
-        break;
-    }
-  }
-
-  $("#tv-start").addEventListener("click", () => conn.send({ t: "start" }));
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "m" || e.key === "M") return toggleMute();
-    if (e.key !== "Enter" && e.key !== " ") return;
-    if (state?.phase === "lobby" && state.players.length >= 2) conn.send({ t: "start" });
-    else if (state?.phase === "roundOver") conn.send({ t: "nextRound" });
-  });
-  keepAwake();
-  window.addEventListener("resize", () => state && layoutSeats(state.players));
 
   // ---------------- rendering ----------------
 
-  function render({ state: s }: Snapshot) {
-    $("#tv-round").innerHTML =
-      s.phase === "lobby"
-        ? ""
-        : `Round ${s.round}${s.settings.targetScore ? ` · first to ${s.settings.targetScore}` : ""}${s.settings.stacking ? " · stacking on" : ""}${
-            s.phase === "playing" ? ` · <span class="dir">${s.direction === 1 ? "↻ clockwise" : "↺ counter-clockwise"}</span>` : ""
-          }`;
+  function render(s: PublicState) {
+    ctx.setStatus(
+      `Round ${s.round}${s.settings.targetScore ? ` · first to ${s.settings.targetScore}` : ""}${s.settings.stacking ? " · stacking on" : ""}${
+        s.phase === "playing" ? ` · <span class="dir">${s.direction === 1 ? "↻ clockwise" : "↺ counter-clockwise"}</span>` : ""
+      }`,
+    );
+    // Like the classic falling-blocks games: the music speeds up when someone's on their last card.
+    audio.setTempo(s.phase === "playing" && s.players.some((p) => p.count === 1) ? 1.22 : 1);
 
-    // Lobby
-    $("#tv-lobby").hidden = s.phase !== "lobby";
-    if (s.phase === "lobby") renderLobby(s);
-
-    // Piles
     $("#deck-count").textContent = String(s.drawPileCount);
     renderDiscard(s.discard);
     const chip = $("#color-chip");
@@ -199,7 +71,6 @@ export function mountTv(root: HTMLElement, code: string) {
 
     renderSeats(s);
 
-    // Ticker
     if (s.phase === "playing" && s.turnId) {
       const p = s.players.find((x) => x.id === s.turnId)!;
       $("#ticker-main").innerHTML = `${avatar(p, "sm")} <b>${esc(p.name)}</b>'s turn${
@@ -208,33 +79,7 @@ export function mountTv(root: HTMLElement, code: string) {
     } else if (s.phase === "roundOver") {
       $("#ticker-main").innerHTML = `<b>${esc(names(s.roundWinner ?? ""))}</b> went out!`;
     }
-
     renderResults(s);
-    syncAudio();
-  }
-
-  function renderLobby(s: PublicState) {
-    const host = s.players.find((p) => p.id === s.hostId);
-    $("#lobby-players").innerHTML = s.players.length
-      ? s.players
-          .map((p) => `<div class="lobby-player" data-pid="${esc(p.id)}">${avatar(p)}<span>${esc(p.name)}${p.id === s.hostId ? ' <i class="crown" title="Host">♛</i>' : ""}</span></div>`)
-          .join("")
-      : `<div class="lobby-empty">Nobody here yet…</div>`;
-    const enough = s.players.length >= 2;
-    $("#lobby-hint").textContent = !s.players.length
-      ? ""
-      : enough
-        ? `${host?.name ?? "The host"} can start from their phone, or press Start here.`
-        : "Need at least one more player (the host can add a bot).";
-    $("#tv-start").hidden = !enough;
-    const r = s.settings;
-    $("#lobby-rules").innerHTML = [
-      r.targetScore ? `First to <b>${r.targetScore}</b> points` : "Single round",
-      r.stacking ? "Stacking <b>on</b>" : "No stacking",
-      r.drawUntilPlayable ? "Draw until you can play" : "Draw one",
-    ]
-      .map((t) => `<span>${t}</span>`)
-      .join("");
   }
 
   function renderDiscard(cards: Card[]) {
@@ -246,12 +91,9 @@ export function mountTv(root: HTMLElement, code: string) {
       let node = existing.get(String(card.id));
       if (!node) {
         node = cardEl(card, "pile-card");
-        const r = ((card.id * 47) % 34) - 17;
-        const x = ((card.id * 13) % 14) - 7;
-        const y = ((card.id * 29) % 10) - 5;
-        node.style.setProperty("--r", `${r}deg`);
-        node.style.setProperty("--x", `${x}%`);
-        node.style.setProperty("--y", `${y}%`);
+        node.style.setProperty("--r", `${((card.id * 47) % 34) - 17}deg`);
+        node.style.setProperty("--x", `${((card.id * 13) % 14) - 7}%`);
+        node.style.setProperty("--y", `${((card.id * 29) % 10) - 5}%`);
       }
       node.style.zIndex = String(i);
       el.append(node);
@@ -294,7 +136,9 @@ export function mountTv(root: HTMLElement, code: string) {
 
   function layoutSeats(players: PublicPlayer[]) {
     const n = players.length;
-    const wrap = $("#table-wrap").getBoundingClientRect();
+    const wrapEl = document.getElementById("table-wrap");
+    if (!wrapEl) return;
+    const wrap = wrapEl.getBoundingClientRect();
     const portrait = wrap.height > wrap.width;
     players.forEach((p, i) => {
       const el = seatEls.get(p.id);
@@ -313,11 +157,12 @@ export function mountTv(root: HTMLElement, code: string) {
     const el = $("#tv-results");
     if (s.phase !== "roundOver") {
       el.hidden = true;
-      el.dataset.seq = "";
+      el.dataset.round = "";
       return;
     }
-    if (el.dataset.seq === String(s.seq)) return;
-    el.dataset.seq = String(s.seq);
+    const key = `${s.round}-${s.players.map((p) => p.score).join(",")}`;
+    if (el.dataset.round === key) return;
+    el.dataset.round = key;
     const winner = s.players.find((p) => p.id === s.roundWinner);
     const target = s.settings.targetScore;
     const ranked = [...s.players].sort((a, b) => b.score - a.score);
@@ -344,21 +189,55 @@ export function mountTv(root: HTMLElement, code: string) {
             .join("")}
         </div>
         <p class="results-next">${
-          gameOver ? "The host can start a new game from their phone" : "The host can deal the next round from their phone"
+          gameOver ? "The host can start a new game or pick another one" : "The host can deal the next round from their phone"
         } — or press <kbd>Enter</kbd> here.</p>
       </div>`;
     // Give the last card a moment to land before covering the table.
     setTimeout(() => {
-      if (state?.phase !== "roundOver") return;
+      if (!alive || state?.phase !== "roundOver") return;
       el.hidden = false;
       if (gameOver) confetti(el);
     }, 1100);
   }
 
-  // ---------------- animation ----------------
+  // ---------------- animation & sound ----------------
 
   function seatRect(pid: string, part = ".seat-body") {
     return seatEls.get(pid)?.querySelector(part)?.getBoundingClientRect() ?? null;
+  }
+
+  function sound(e: GameEvent, delay: number) {
+    const at = (fn: () => void, extra = 0) => setTimeout(fn, delay + extra);
+    switch (e.type) {
+      case "play": {
+        const v = e.card.value;
+        const kind = v === "draw2" || v === "wild4" ? "draw" : v === "wild" ? "wild" : v === "skip" || v === "reverse" ? "action" : "normal";
+        at(() => audio.cardPlay(kind), 480);
+        break;
+      }
+      case "draw":
+        if (e.reason !== "join" && e.count) at(() => audio.draw(e.count));
+        break;
+      case "skip":
+        at(() => audio.skip());
+        break;
+      case "reverse":
+        at(() => audio.reverse());
+        break;
+      case "ohno":
+        audio.ohno();
+        break;
+      case "caught":
+        at(() => audio.caught());
+        break;
+      case "deal":
+      case "reshuffle":
+        at(() => audio.shuffle());
+        break;
+      case "roundOver":
+        at(() => audio.fanfare(), 700);
+        break;
+    }
   }
 
   function animate(events: GameEvent[]) {
@@ -450,8 +329,6 @@ export function mountTv(root: HTMLElement, code: string) {
         return `${n(e.by)} caught ${n(e.pid)}! +${e.count}`;
       case "reshuffle":
         return "Reshuffled the discard pile";
-      case "left":
-        return e.kicked ? "A player was removed" : "A player left";
       case "deal":
         return `Round ${e.round} — ${n(e.first)} goes first`;
       default:
@@ -459,51 +336,68 @@ export function mountTv(root: HTMLElement, code: string) {
     }
   }
 
+  function later(delay: number, fn: () => void) {
+    setTimeout(() => alive && fn(), delay);
+  }
+
   function bubble(pid: string, text: string, kind: "good" | "bad", delay: number) {
     const seat = seatEls.get(pid);
     if (!seat) return;
-    setTimeout(() => {
+    later(delay, () => {
       const b = document.createElement("div");
       b.className = `bubble ${kind}`;
       b.textContent = text;
       seat.append(b);
       setTimeout(() => b.remove(), 1900);
-    }, delay);
+    });
   }
 
   /** A big ⊘ stamped over a skipped player's seat. */
   function stamp(pid: string, delay: number) {
     const seat = seatEls.get(pid);
     if (!seat) return;
-    setTimeout(() => {
+    later(delay, () => {
       const st = document.createElement("div");
       st.className = "skip-stamp";
       st.textContent = "⊘";
       seat.append(st);
       setTimeout(() => st.remove(), 1600);
-    }, delay);
+    });
   }
 
   function colorBurst(color: Color, delay: number) {
-    setTimeout(() => {
-      const d = $("#discard");
+    later(delay, () => {
       const ring = document.createElement("div");
       ring.className = `burst c-${color}`;
-      d.parentElement!.append(ring);
+      $("#discard").parentElement!.append(ring);
       setTimeout(() => ring.remove(), 900);
-    }, delay);
+    });
   }
 
   function dealAnimation() {
     if (!state) return;
     const from = $("#deck").getBoundingClientRect();
-    state.players.forEach((p, i) => {
+    const players = state.players;
+    players.forEach((p, i) => {
       const to = seatRect(p.id, ".seat-fan");
       if (!to) return;
       const target = new DOMRect(to.left + to.width / 2 - from.width * 0.2, to.top, from.width * 0.4, from.height * 0.4);
-      for (let k = 0; k < 3; k++) fly(cardEl(null), from, target, { delay: (k * state!.players.length + i) * 90, duration: 420 });
+      for (let k = 0; k < 3; k++) fly(cardEl(null), from, target, { delay: (k * players.length + i) * 90, duration: 420 });
     });
   }
+
+  return {
+    update,
+    onEnter() {
+      if (state?.phase === "roundOver") ctx.send({ t: "nextRound" });
+    },
+    destroy() {
+      alive = false;
+      ac.abort();
+      audio.setTempo(1);
+      ctx.el.innerHTML = "";
+    },
+  };
 }
 
 function arcPt(deg: number) {

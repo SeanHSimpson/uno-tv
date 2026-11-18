@@ -1879,3 +1879,484 @@ kbd {
 #avatar-sheet .avatar-choice {
   font-size: 1.8rem;
 }
+
+/* =====================================================================
+   HUB: shells + game picker
+   ===================================================================== */
+.tv {
+  grid-template-rows: auto 1fr;
+}
+.tv-game {
+  position: relative;
+  min-height: 0;
+}
+.ohno-tv {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-height: 0;
+}
+.ph-game {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ohno-phone {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ohno-phone > .hand {
+  flex: 1 1 0;
+}
+
+.hub-title {
+  display: flex;
+  align-items: baseline;
+  gap: 1.4vmin;
+}
+.logo-lg {
+  font-size: 9vmin;
+}
+.hub-sub {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 3.2vmin;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.hub-games {
+  display: grid;
+  gap: 1.4vmin;
+  width: 100%;
+}
+.mode-tv .hub-games {
+  grid-template-columns: repeat(auto-fill, minmax(34vmin, 1fr));
+}
+.game-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1.2em;
+  text-align: left;
+  padding: 0.9em 1.1em;
+  border-radius: 1.1em;
+  border: 0;
+  background: rgba(255, 246, 230, 0.07);
+  box-shadow: inset 0 0 0 2px rgba(255, 246, 230, 0.1);
+  color: var(--cream);
+  transition:
+    background 0.2s,
+    box-shadow 0.2s,
+    transform 0.15s;
+}
+button.game-card:active {
+  transform: scale(0.98);
+}
+.game-card.on {
+  background: rgba(255, 191, 94, 0.16);
+  box-shadow:
+    inset 0 0 0 3px var(--amber),
+    0 0.6em 1.6em rgba(0, 0, 0, 0.3);
+}
+.gc-emoji {
+  font-size: 2.3em;
+  line-height: 1;
+  flex: none;
+}
+.gc-text {
+  display: grid;
+  gap: 0.15em;
+  min-width: 0;
+}
+.gc-text b {
+  font-family: var(--font-display);
+  font-size: 1.25em;
+  font-weight: 600;
+}
+.gc-text small {
+  color: var(--muted);
+  font-size: 0.85em;
+  line-height: 1.3;
+}
+.gc-text em {
+  font-style: normal;
+  font-size: 0.75em;
+  font-weight: 800;
+  color: var(--amber);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.gc-next {
+  position: absolute;
+  top: -0.7em;
+  right: 0.9em;
+  background: var(--amber);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 0.7em;
+  padding: 0.2em 0.7em;
+  border-radius: 999px;
+}
+.hub-howto {
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.45;
+  max-width: 70ch;
+}
+.hub-howto b {
+  color: var(--cream);
+}
+.mode-tv .hub-howto {
+  font-size: 1.05em;
+}
+.join-at {
+  color: var(--muted);
+  margin: 0;
+}
+.join-at b {
+  color: var(--cream);
+}
+.notice {
+  background: rgba(226, 85, 63, 0.18);
+  box-shadow: inset 0 0 0 2px rgba(226, 85, 63, 0.5);
+  color: var(--cream);
+  padding: 0.5em 0.9em;
+  border-radius: 0.8em;
+  font-weight: 700;
+}
+.pick-title {
+  font-family: var(--font-display);
+  margin: 6px 0 -2px;
+  font-size: 1.15rem;
+  text-align: left;
+}
+.mode-phone .game-card {
+  font-size: 0.95rem;
+  width: 100%;
+}
+.mode-phone .hub-howto {
+  font-size: 0.92rem;
+  text-align: left;
+}
+
+/* =====================================================================
+   HUSH
+   ===================================================================== */
+.num-card {
+  --cw: 9vmin;
+  position: relative;
+  width: var(--cw);
+  aspect-ratio: 2 / 3;
+  border-radius: 10%/7%;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.55), transparent 55%),
+    linear-gradient(160deg, hsl(var(--h) 70% 78%), hsl(var(--h) 55% 58%));
+  box-shadow:
+    inset 0 0 0 calc(var(--cw) * 0.045) var(--cream),
+    inset 0 0 0 calc(var(--cw) * 0.09) hsl(var(--h) 45% 50% / 0.35),
+    0 0.4vmin 1vmin rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  color: hsl(var(--h) 55% 18%);
+  font-family: var(--font-display);
+  font-weight: 700;
+  flex: none;
+}
+.num-card::before {
+  /* stitched border, like the OhNo! cards */
+  content: "";
+  position: absolute;
+  inset: calc(var(--cw) * 0.12);
+  border: calc(var(--cw) * 0.02) dashed rgba(255, 246, 230, 0.75);
+  border-radius: 8%/5%;
+}
+.nc-num {
+  font-size: calc(var(--cw) * 0.48);
+  line-height: 1;
+  text-shadow: 0 calc(var(--cw) * 0.02) 0 rgba(255, 255, 255, 0.5);
+}
+.nc-corner {
+  position: absolute;
+  top: calc(var(--cw) * 0.14);
+  left: calc(var(--cw) * 0.16);
+  font-size: calc(var(--cw) * 0.15);
+}
+.nc-br {
+  top: auto;
+  left: auto;
+  bottom: calc(var(--cw) * 0.14);
+  right: calc(var(--cw) * 0.16);
+  rotate: 180deg;
+}
+
+.hush-tv {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 2vmin;
+  padding: 1vmin 4vmin 3vmin;
+  background: radial-gradient(ellipse 70% 60% at 50% 45%, rgba(84, 104, 170, 0.22), transparent 70%);
+}
+.hush-tokens {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2vmin;
+  font-size: 4.4vmin;
+  letter-spacing: 0.3vmin;
+}
+.hush-sep {
+  width: 0.4vmin;
+  height: 4vmin;
+  background: rgba(255, 246, 230, 0.2);
+  border-radius: 1vmin;
+}
+.hush-stage {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  align-items: center;
+  gap: 2vmin;
+  min-height: 0;
+}
+.hush-pile {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1.2vmin;
+}
+.hush-pile .nc-trail {
+  --cw: 8vmin;
+  opacity: 0.55;
+}
+.hush-pile .nc-top {
+  --cw: 22vmin;
+  margin-left: 1.5vmin;
+}
+.nc-land {
+  animation: nc-land 0.5s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+@keyframes nc-land {
+  from {
+    transform: translateY(-14vmin) rotate(-8deg) scale(0.7);
+    opacity: 0;
+  }
+}
+.hush-empty {
+  font-size: 18vmin;
+  opacity: 0.5;
+}
+.hush-banner {
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 4vmin;
+  line-height: 1.25;
+  min-height: 9vmin;
+}
+.hush-banner small {
+  font-family: var(--font-ui);
+  font-size: 0.55em;
+  color: var(--muted);
+  font-weight: 700;
+}
+.hush-banner.flash {
+  padding: 1vmin 4vmin;
+  border-radius: 2vmin;
+  animation: rise 0.4s ease;
+}
+.hush-banner.flash.bad {
+  background: rgba(226, 85, 63, 0.2);
+  box-shadow: inset 0 0 0 0.4vmin var(--danger);
+}
+.hush-banner.flash.good {
+  background: rgba(255, 191, 94, 0.14);
+  box-shadow: inset 0 0 0 0.4vmin var(--amber);
+}
+.hush-banner.flash small {
+  color: var(--cream);
+}
+.hush-discards {
+  display: flex;
+  align-items: center;
+  gap: 0.8vmin;
+  flex-wrap: wrap;
+  justify-content: center;
+  min-height: 6vmin;
+}
+.nc-mini {
+  --cw: 4.2vmin;
+}
+.nc-out {
+  opacity: 0.6;
+  filter: grayscale(0.5);
+}
+.hush-players {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2vmin;
+}
+.hush-player {
+  display: grid;
+  justify-items: center;
+  gap: 0.6vmin;
+  padding: 1.4vmin 2vmin;
+  border-radius: 2vmin;
+  background: rgba(26, 20, 18, 0.7);
+  min-width: 16vmin;
+}
+.hush-player.offline {
+  opacity: 0.5;
+}
+.hush-player.done {
+  opacity: 0.65;
+}
+.hp-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15em;
+}
+.hp-cards {
+  display: flex;
+  gap: 0.3vmin;
+  min-height: 3.6vmin;
+  align-items: center;
+}
+.hp-cards i {
+  width: 2.2vmin;
+  height: 3.3vmin;
+  border-radius: 0.4vmin;
+  background: linear-gradient(135deg, #5a6aa6, #333f72);
+  box-shadow: inset 0 0 0 0.25vmin var(--cream);
+}
+.hp-cards em {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+.hp-flag {
+  font-weight: 800;
+  font-size: 0.85em;
+  color: var(--amber);
+  min-height: 1.2em;
+}
+.hush-big-emoji {
+  font-size: 12vmin;
+  line-height: 1;
+}
+.hush-reveal {
+  display: grid;
+  gap: 1vmin;
+  justify-content: center;
+}
+.hush-reveal > div {
+  display: flex;
+  align-items: center;
+  gap: 1vmin;
+}
+
+/* phone */
+.hush-phone {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 16px 14px;
+}
+.hush-ph-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+.hush-ph-top .hush-hearts,
+.hush-ph-top .hush-stars {
+  font-size: 1.1rem;
+}
+.hush-ph-last {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.hush-ph-last .nc-small {
+  --cw: 64px;
+}
+.hush-shh {
+  font-size: 44px;
+  opacity: 0.6;
+}
+.hush-ph-hand {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 8px;
+  touch-action: none;
+}
+.hush-ph-hand .num-card {
+  --cw: 70px;
+}
+.hush-ph-hand .num-card.nc-lowest {
+  --cw: 104px;
+  box-shadow:
+    inset 0 0 0 4px var(--cream),
+    0 0 0 4px var(--amber),
+    0 0 24px rgba(255, 191, 94, 0.6);
+}
+.hush-ph-hand p {
+  text-align: center;
+}
+.hush-ph-actions {
+  display: grid;
+  gap: 10px;
+}
+.hush-go {
+  min-height: 64px;
+  font-size: 1.3rem;
+}
+#hush-star.on {
+  background: rgba(255, 191, 94, 0.22);
+  box-shadow: inset 0 0 0 2px var(--amber);
+}
+
+/* Hub lobby on the TV: keep everything (including Start) on one screen */
+.tv-lobby {
+  overflow-y: auto;
+}
+.mode-tv .lobby-card {
+  padding: 3vmin 4vmin;
+  gap: 5vmin;
+}
+.mode-tv .lobby-left {
+  gap: 1.6vmin;
+}
+.logo-lg {
+  font-size: 7.5vmin;
+}
+.mode-tv .lobby-left .tagline {
+  font-size: 1.25em;
+}
+.mode-tv .game-card {
+  font-size: 0.92em;
+}
+.mode-tv .hub-howto {
+  font-size: 0.95em;
+}
+.mode-tv .lobby-players .lobby-player {
+  font-size: 1em;
+}
+.mode-tv .lobby-players .avatar {
+  --size: 2.2em;
+}
+.mode-tv .qr-big {
+  width: min(42vmin, 100%);
+}

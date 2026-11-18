@@ -1,10 +1,10 @@
 import "./styles.css";
 import { audio } from "./audio";
 import { cardEl, installCardDefs } from "./cards";
-import { AVATARS } from "../shared/types";
+import { AVATARS } from "../shared/common";
 import { createRoom, roomExists, saveAvatar, savedAvatar, saveName, savedName } from "./net";
-import { mountPhone } from "./phone";
-import { mountTv } from "./tv";
+import { mountPhone } from "./shell/phone";
+import { mountTv } from "./shell/tv";
 import { $, avatarPicker, esc, toast } from "./ui";
 
 // Routes (query-string based so it works as a plain static site):

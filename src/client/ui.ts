@@ -1,4 +1,4 @@
-import { AVATARS, type PublicPlayer } from "../shared/types";
+import { AVATARS } from "../shared/common";
 
 /** Tiny tagged-template helper that escapes interpolated values. */
 export function esc(v: unknown): string {
@@ -15,7 +15,7 @@ export function $(sel: string, root: ParentNode = document): HTMLElement {
 const AVATAR = ["#e98a5b", "#7fb7a4", "#c98bb9", "#e6c069", "#8aa6d6", "#d98282", "#9bc47c", "#b49a7a", "#73b6c9", "#d6a2e0"];
 export const avatarColor = (hue: number) => AVATAR[hue % AVATAR.length]!;
 
-export function avatar(p: Pick<PublicPlayer, "name" | "hue"> & { bot?: boolean; avatar?: string | null }, cls = ""): string {
+export function avatar(p: { name: string; hue: number; bot?: boolean; avatar?: string | null }, cls = ""): string {
   const pic = p.bot ? "🤖" : p.avatar;
   const face = pic ? esc(pic) : esc([...p.name.trim()][0]?.toUpperCase() ?? "?");
   return `<span class="avatar ${pic ? "emoji" : ""} ${cls}" style="--av:${avatarColor(p.hue)}">${face}</span>`;

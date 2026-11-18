@@ -366,6 +366,11 @@ class AudioEngine {
     });
   }
 
+  /** A single music-box note (Hush plays one per card, pitched by its number). */
+  note(midi: number, vol = 0.3) {
+    this.sfx((t, out) => this.musicBox(hz(midi), t, 1.4, vol, out));
+  }
+
   tick() {
     this.sfx((t, out) => {
       const g = this.env(t, 0.12, 0.002, 0.03, out);
