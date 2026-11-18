@@ -27,6 +27,28 @@ Match the top card by **color** or **symbol**, or play a **Wild**. The first per
 - **Scoring:** the winner of a round scores the cards left in everyone else's hands (number cards are worth their number, actions 20, wilds 50). Play a single round, or first to 200 or 500.
 - Each color also has its own little shape (♥ red, ☀ yellow, 🍃 green, 💧 blue), so color-blind players can tell them apart.
 
+### Playing cards on your phone
+
+- **Swipe a card up** toward the TV to play it. The card glows once you've swiped far enough, and snaps back if you let go early.
+- Or **tap a card** to raise it, then **tap it again** to play.
+- On Android your phone vibrates when it's your turn. iPhones don't let websites vibrate, so you get a chime and a big "Your turn!" flash instead.
+
+### Music & sound
+
+The TV plays the music; phones play small sounds for their own player (the turn chime, your card hitting the table, the OhNo! sting, getting caught). All of it is synthesized in the browser, so there are no audio files.
+
+| When | Music |
+| --- | --- |
+| Lobby & between rounds | Chopin, *Nocturne in E-flat, Op. 9 No. 2* (opening theme) |
+| During play (rotates) | *Korobeiniki* (the Russian folk song that the classic falling-blocks game made famous), Grieg's *In the Hall of the Mountain King*, and Petzold/Bach's *Minuet in G* |
+
+- The music **speeds up** when anyone is down to their last card.
+- Pressing **OhNo!** sets off a suspense sting on the TV: a rumble and rising tremolo, then *dun… dun… DUNNN*.
+- **TV:** 🔊 button in the top bar, or press **M** to mute. The host can also turn the TV's music and sound effects on or off from ⚙︎ on their phone, even mid-game. Browsers only allow sound after a click, so if the TV page was refreshed, it shows "Click anywhere for music & sound".
+- **Phones:** 🔊 button in the top corner. On iPhone, the silent switch also mutes web sounds.
+
+All four pieces are public domain. These are our own music-box arrangements. The nocturne's notes were checked against the [Mutopia Project](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1590) edition (from G. Schirmer, 1881; CC BY-SA 3.0).
+
 ### Host controls (⚙︎ on the host's phone)
 
 - House rules: game length, stacking, draw-one vs. draw-until-playable, and the forgot-OhNo! penalty.
@@ -49,8 +71,9 @@ src/
     index.ts             Worker entry + `Room` Durable Object (PartyServer, hibernating WebSockets)
   client/
     main.ts              Home / join screens and routing
-    tv.ts                TV table: seats, piles, direction ring, animations, lobby, results
-    phone.ts             Phone hand: auto-fitting card grid, color picker, OhNo!/Catch, host sheet
+    tv.ts                TV table: seats, piles, direction ring, animations, lobby, results, music
+    phone.ts             Phone hand: auto-fitting grid, swipe/tap to play, color picker, OhNo!/Catch, host sheet
+    audio.ts             Synthesized music (public-domain tunes) + sound effects + haptics
     cards.ts             Original SVG card art (faces + backs)
     net.ts               PartySocket connection, room API, player id
     ui.ts, fx.ts         Helpers: avatars, toasts, fly animation, confetti, wake lock
@@ -113,7 +136,7 @@ Wrangler prints your URL, for example `https://ohno.<your-subdomain>.workers.dev
 
 ## Ideas for what's next
 
-- **Sound:** a soft card "thwip", a shuffle, an OhNo! chime, and a turn ding on phones. Use Web Audio synthesis or tiny OGG files, with a mute toggle on the TV.
+- **More music:** add more public-domain tunes to `SONGS` in `src/client/audio.ts` (one line of notes per bar; the tests check every bar adds up).
 - **More house rules:** 7-0 (a 7 swaps hands, a 0 rotates everyone's hands), jump-in (play an identical card out of turn), challenging a Wild +4 (only legal when you have no card of the current color), and draw-until-playable with forced play.
 - **Turn timer:** an optional countdown ring on the TV seat, with auto-draw when it runs out. It's a good fit for a Durable Object alarm.
 - **Spectators:** a third connection role that sees the table but has no hand, for a second TV or someone following along remotely.

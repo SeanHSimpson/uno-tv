@@ -1,4 +1,5 @@
 import "./styles.css";
+import { audio } from "./audio";
 import { cardEl, installCardDefs } from "./cards";
 import { createRoom, roomExists, saveName, savedName } from "./net";
 import { mountPhone } from "./phone";
@@ -73,6 +74,7 @@ function home(prefill: string) {
 
   $("#join-form").addEventListener("submit", async (e) => {
     e.preventDefault();
+    audio.unlock(); // this tap counts as the gesture browsers need before playing sound
     const name = ($("#name") as HTMLInputElement).value.trim();
     const code = norm(codeInput.value);
     if (!name) return toast("Pop your name in first.");
@@ -85,6 +87,7 @@ function home(prefill: string) {
 
   $("#host-btn").addEventListener("click", async (e) => {
     const btn = e.currentTarget as HTMLButtonElement;
+    audio.unlock(); // start the TV's audio from this click
     btn.disabled = true;
     btn.textContent = "Setting the table…";
     try {

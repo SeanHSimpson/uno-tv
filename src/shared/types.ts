@@ -23,6 +23,10 @@ export interface Settings {
   targetScore: number;
   /** Cards drawn when caught without calling OhNo!. */
   catchPenalty: number;
+  /** Background music on the TV (host can toggle from their phone). */
+  tvMusic: boolean;
+  /** Sound effects on the TV. */
+  tvSounds: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -30,6 +34,8 @@ export const DEFAULT_SETTINGS: Settings = {
   drawUntilPlayable: false,
   targetScore: 0,
   catchPenalty: 2,
+  tvMusic: true,
+  tvSounds: true,
 };
 
 export type Phase = "lobby" | "playing" | "roundOver";

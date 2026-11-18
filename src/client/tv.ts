@@ -1,6 +1,7 @@
 import QRCode from "qrcode";
 import type { Card, Color, GameEvent, PublicPlayer, PublicState } from "../shared/types";
 import { cardEl, COLOR_NAMES, shapeSvg, shortLabel } from "./cards";
+import { audio, loadPref, savePref, unlockOnFirstGesture } from "./audio";
 import { confetti } from "./fx";
 import { connectRoom, type Snapshot } from "./net";
 import { $, avatar, esc, fly, joinOrigin, keepAwake, reducedMotion, toast } from "./ui";
@@ -14,6 +15,7 @@ export function mountTv(root: HTMLElement, code: string) {
     <header class="tv-top">
       <div class="logo">Oh<span>No!</span></div>
       <div class="tv-round" id="tv-round"></div>
+      <button class="sound-btn" id="tv-sound" title="Sound on/off (M)" aria-label="Sound on/off">🔊</button>
       <div class="tv-join">
         <div class="qr qr-mini" id="qr-mini"></div>
         <div class="tv-join-text"><small>Join at <b>${esc(prettyUrl)}</b></small><span class="code">${esc(code)}</span></div>
@@ -62,6 +64,7 @@ export function mountTv(root: HTMLElement, code: string) {
 
     <section class="tv-results overlay" id="tv-results" hidden></section>
     <div class="conn-lost" id="conn-lost" hidden>Reconnecting…</div>
+    <button class="tap-sound" id="tap-sound" hidden>🔈 Click anywhere for music &amp; sound</button>
   </div>`;
 
   const qrOpts = { margin: 1, color: { dark: "#2b1d1a", light: "#fff6e6" } };
@@ -92,8 +95,72 @@ export function mountTv(root: HTMLElement, code: string) {
     },
   });
 
+  // ---------------- audio ----------------
+  // Browsers only allow sound after someone clicks/taps the page. Hosting from the
+  // home page counts; after a refresh we show a small "click for sound" prompt.
+  let muted = loadPref("tvMute", false);
+  unlockOnFirstGesture();
+  audio.onStateChange(syncAudio);
+  const toggleMute = () => {
+    muted = !muted;
+    savePref("tvMute", muted);
+    audio.unlock();
+    syncAudio();
+  };
+  $("#tv-sound").addEventListener("click", toggleMute);
+  $("#tap-sound").addEventListener("click", () => audio.unlock());
+
+  function syncAudio() {
+    $("#tap-sound").hidden = audio.ready || muted;
+    $("#tv-sound").textContent = muted ? "🔇" : "🔊";
+    if (!state) return;
+    audio.sfxEnabled = !muted && state.settings.tvSounds;
+    const wanted = muted || !state.settings.tvMusic ? null : state.phase === "playing" ? "game" : "calm";
+    audio.setMusic(wanted);
+    // Like the classic falling-blocks games: the music speeds up when someone's on their last card.
+    audio.setTempo(state.phase === "playing" && state.players.some((p) => p.count === 1) ? 1.22 : 1);
+  }
+
+  function sound(e: GameEvent, delay: number) {
+    const at = (fn: () => void, extra = 0) => setTimeout(fn, delay + extra);
+    switch (e.type) {
+      case "play": {
+        const v = e.card.value;
+        const kind = v === "draw2" || v === "wild4" ? "draw" : v === "wild" ? "wild" : v === "skip" || v === "reverse" ? "action" : "normal";
+        at(() => audio.cardPlay(kind), 480);
+        break;
+      }
+      case "draw":
+        if (e.reason !== "join" && e.count) at(() => audio.draw(e.count));
+        break;
+      case "skip":
+        at(() => audio.skip());
+        break;
+      case "reverse":
+        at(() => audio.reverse());
+        break;
+      case "ohno":
+        audio.ohno();
+        break;
+      case "caught":
+        at(() => audio.caught());
+        break;
+      case "deal":
+      case "reshuffle":
+        at(() => audio.shuffle());
+        break;
+      case "joined":
+        audio.pop();
+        break;
+      case "roundOver":
+        at(() => audio.fanfare(), 700);
+        break;
+    }
+  }
+
   $("#tv-start").addEventListener("click", () => conn.send({ t: "start" }));
   document.addEventListener("keydown", (e) => {
+    if (e.key === "m" || e.key === "M") return toggleMute();
     if (e.key !== "Enter" && e.key !== " ") return;
     if (state?.phase === "lobby" && state.players.length >= 2) conn.send({ t: "start" });
     else if (state?.phase === "roundOver") conn.send({ t: "nextRound" });
@@ -141,6 +208,7 @@ export function mountTv(root: HTMLElement, code: string) {
     }
 
     renderResults(s);
+    syncAudio();
   }
 
   function renderLobby(s: PublicState) {
@@ -298,6 +366,7 @@ export function mountTv(root: HTMLElement, code: string) {
     for (const e of events) {
       const text = describe(e);
       if (text) msgs.push(text);
+      sound(e, quick ? 0 : delay);
       if (quick) continue;
       switch (e.type) {
         case "play": {
