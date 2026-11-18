@@ -219,3 +219,31 @@ describe("duplicates (two or three decks)", () => {
     expect(findContract(nines, { sets: 2, runs: 0 }, true)).not.toBeNull();
   });
 });
+
+describe("selection hint", () => {
+  // Imported lazily so this block stays self-contained.
+  it("explains why Lay down isn't ready (and when it is)", async () => {
+    const { selectionHint } = await import("../src/shared/games/rummy/hint");
+    const D = (r: number) => c(r, "D");
+    const run = [7, 8, 9, 10].map(D);
+    const opts = { final: false, handSize: 11 };
+    // Round 1 (2 sets): a run doesn't count.
+    expect(selectionHint(run, { sets: 2, runs: 0 }, opts)?.text).toMatch(/needs sets only/);
+    // Round 2 (set + run): the run is half of it.
+    expect(selectionHint(run, { sets: 1, runs: 1 }, opts)).toEqual({ ok: false, text: expect.stringMatching(/That's 1 run of 4\. You still need 1 set of 3/) });
+    // Round 3 (2 runs): one of two.
+    expect(selectionHint(run, { sets: 0, runs: 2 }, opts)?.text).toMatch(/You still need 1 run of 4/);
+    // Whole contract selected.
+    const set = [c(5, "S"), c(5, "H"), c(5, "C")];
+    expect(selectionHint([...run, ...set], { sets: 1, runs: 1 }, opts)).toMatchObject({ ok: true });
+    // Round 1, one set so far.
+    expect(selectionHint(set, { sets: 2, runs: 0 }, opts)?.text).toMatch(/That's 1 set of 3\. You still need 1 set of 3/);
+    // Not a group yet.
+    expect(selectionHint([c(2, "S"), c(9, "H"), c(13, "C")], { sets: 2, runs: 0 }, opts)?.text).toMatch(/don't make a group yet/);
+    // Nothing selected: no hint.
+    expect(selectionHint([], { sets: 2, runs: 0 }, opts)).toBeNull();
+    // Last round needs the whole hand.
+    const three = [...[1, 2, 3, 4].map((r) => c(r, "S")), ...[5, 6, 7, 8].map((r) => c(r, "H")), ...[9, 10, 11, 12].map((r) => c(r, "C"))];
+    expect(selectionHint(three, { sets: 0, runs: 3 }, { final: true, handSize: 13 })?.text).toMatch(/whole hand/);
+  });
+});

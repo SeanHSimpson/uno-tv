@@ -208,6 +208,8 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
     renderHand();
     renderActions();
     renderResults();
+    // The action bar can appear or disappear: size the cards last.
+    layoutHand();
   }
 
   function renderActions() {
@@ -281,8 +283,10 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
   function layoutHand() {
     if (!me) return;
     const n = Math.max(1, me.hand.length);
-    const W = hand.clientWidth - 8;
-    const H = hand.clientHeight - 8;
+    // Measure the space inside the padding (selected cards also lift a little).
+    const cs = getComputedStyle(hand);
+    const W = hand.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8;
+    const H = hand.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 14;
     const gap = n > 12 ? 4 : 8;
     let best = { w: 0, cols: 1 };
     for (let cols = 1; cols <= n; cols++) {
