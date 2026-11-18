@@ -1,4 +1,4 @@
-import type { PublicPlayer } from "../shared/types";
+import { AVATARS, type PublicPlayer } from "../shared/types";
 
 /** Tiny tagged-template helper that escapes interpolated values. */
 export function esc(v: unknown): string {
@@ -15,9 +15,17 @@ export function $(sel: string, root: ParentNode = document): HTMLElement {
 const AVATAR = ["#e98a5b", "#7fb7a4", "#c98bb9", "#e6c069", "#8aa6d6", "#d98282", "#9bc47c", "#b49a7a", "#73b6c9", "#d6a2e0"];
 export const avatarColor = (hue: number) => AVATAR[hue % AVATAR.length]!;
 
-export function avatar(p: Pick<PublicPlayer, "name" | "hue"> & { bot?: boolean }, cls = ""): string {
-  const initial = p.bot ? "🤖" : esc([...p.name.trim()][0]?.toUpperCase() ?? "?");
-  return `<span class="avatar ${cls}" style="--av:${avatarColor(p.hue)}">${initial}</span>`;
+export function avatar(p: Pick<PublicPlayer, "name" | "hue"> & { bot?: boolean; avatar?: string | null }, cls = ""): string {
+  const pic = p.bot ? "🤖" : p.avatar;
+  const face = pic ? esc(pic) : esc([...p.name.trim()][0]?.toUpperCase() ?? "?");
+  return `<span class="avatar ${pic ? "emoji" : ""} ${cls}" style="--av:${avatarColor(p.hue)}">${face}</span>`;
+}
+
+/** Grid of pictures to choose from; `data-avatar` on each button. */
+export function avatarPicker(selected: string | null): string {
+  return `<div class="avatar-picker" role="radiogroup" aria-label="Pick your picture">${AVATARS.map(
+    (a) => `<button type="button" class="avatar-choice ${a === selected ? "on" : ""}" data-avatar="${a}" role="radio" aria-checked="${a === selected}">${a}</button>`,
+  ).join("")}</div>`;
 }
 
 let toastTimer = 0;

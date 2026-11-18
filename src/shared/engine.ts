@@ -3,6 +3,7 @@
 // or throws a GameError with a friendly message.
 
 import {
+  AVATARS,
   COLORS,
   DEFAULT_SETTINGS,
   HAND_SIZE,
@@ -137,12 +138,26 @@ export function addBot(s: GameState, by: string, rng: Rng = Math.random): GameEv
   return events;
 }
 
-export function joinPlayer(s: GameState, pid: string, rawName: unknown, rng: Rng = Math.random): GameEvent[] {
+/** Only accept pictures from our list (anything else is ignored). */
+export function cleanAvatar(raw: unknown): string | undefined {
+  return typeof raw === "string" && (AVATARS as readonly string[]).includes(raw) ? raw : undefined;
+}
+
+export function setAvatar(s: GameState, pid: string, raw: unknown): GameEvent[] {
+  const p = player(s, pid);
+  const avatar = cleanAvatar(raw);
+  if (!avatar) fail("Pick one of the pictures.");
+  p.avatar = avatar;
+  return [];
+}
+
+export function joinPlayer(s: GameState, pid: string, rawName: unknown, rng: Rng = Math.random, rawAvatar?: unknown): GameEvent[] {
   const events: GameEvent[] = [];
   const existing = s.players.find((p) => p.id === pid);
   if (existing) {
     existing.connected = true;
     if (rawName) existing.name = cleanName(rawName);
+    existing.avatar = cleanAvatar(rawAvatar) ?? existing.avatar;
     return events;
   }
   if (s.players.length >= MAX_PLAYERS) fail(`This table is full (${MAX_PLAYERS} players max).`);
@@ -158,6 +173,7 @@ export function joinPlayer(s: GameState, pid: string, rawName: unknown, rng: Rng
     calledOhNo: false,
     lastPlayed: null,
     hue,
+    avatar: cleanAvatar(rawAvatar),
   };
   s.players.push(p);
   if (!s.hostId) s.hostId = pid;
@@ -577,6 +593,7 @@ export function publicView(s: GameState): PublicState {
       lastPlayed: p.lastPlayed,
       hue: p.hue,
       bot: !!p.bot,
+      avatar: p.avatar ?? null,
     })),
     discard: s.discard.slice(-6),
     color: s.color,

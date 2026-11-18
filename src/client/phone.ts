@@ -1,9 +1,9 @@
 import { COLORS, type Color, type GameEvent, type PrivateState, type PublicState, type Settings } from "../shared/types";
 import { cardEl, COLOR_NAMES, shapeSvg, shortLabel, sortHand } from "./cards";
 import { confetti } from "./fx";
-import { connectRoom, playerId } from "./net";
+import { connectRoom, playerId, saveAvatar, savedAvatar } from "./net";
 import { audio, haptic, loadPref, savePref, unlockOnFirstGesture } from "./audio";
-import { $, avatar, esc, fly, keepAwake, reducedMotion, toast } from "./ui";
+import { $, avatar, avatarPicker, esc, fly, keepAwake, reducedMotion, toast } from "./ui";
 
 export function mountPhone(root: HTMLElement, code: string, name: string) {
   document.body.className = "mode-phone";
@@ -37,6 +37,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
       <button class="btn btn-ghost wide" data-close>Cancel</button>
     </section>
     <section class="sheet" id="host-sheet" hidden></section>
+    <section class="sheet" id="avatar-sheet" hidden></section>
     <div class="conn-lost" id="conn-lost" hidden>Reconnecting…</div>
   </div>`;
 
@@ -55,7 +56,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
   };
   syncSoundBtn();
 
-  const conn = connectRoom(code, { role: "player", pid, name }, {
+  const conn = connectRoom(code, { role: "player", pid, name, avatar: savedAvatar() ?? "" }, {
     onState(snap) {
       const prevState = state;
       state = snap.state;
@@ -119,6 +120,13 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
       wildPending = null;
       selected = null;
       closeSheets();
+    }
+    const pic = t.closest<HTMLElement>("#avatar-sheet [data-avatar]");
+    if (pic) {
+      send({ t: "avatar", avatar: pic.dataset.avatar! });
+      saveAvatar(pic.dataset.avatar!);
+      closeSheets();
+      return;
     }
     const act = t.closest<HTMLElement>("[data-act]");
     if (act) hostAction(act);
@@ -228,6 +236,11 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
     else if (a === "skip") (send({ t: "skip" }), closeSheets());
     else if (a === "kick") send({ t: "kick", pid: btn.dataset.pid! });
     else if (a === "addBot") send({ t: "addBot" });
+    else if (a === "pickAvatar") {
+      const mine = state?.players.find((p) => p.id === pid)?.avatar ?? savedAvatar();
+      $("#avatar-sheet").innerHTML = `<h3>Pick your picture</h3>${avatarPicker(mine ?? null)}<button class="btn btn-ghost wide" data-close>Done</button>`;
+      openSheet("avatar-sheet");
+    }
     else if (a === "catch") send({ t: "catch", target: btn.dataset.pid! });
     else if (a === "set") {
       const key = btn.dataset.key as keyof Settings;
@@ -462,11 +475,14 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
       <div class="ph-lobby-inner">
         <div class="logo">Oh<span>No!</span></div>
         <h2>You're in! 🎉</h2>
+        <p class="muted small">Tap your picture to change it.</p>
         <p class="muted">${isHost ? "You're the host. Start when everyone's here." : `Waiting for ${esc(playerName(s.hostId))} to start the game…`}</p>
         <div class="lobby-players">${s.players
           .map(
             (p) =>
-              `<div class="lobby-player">${avatar(p)}<span>${esc(p.name)}${p.id === pid ? " (you)" : ""}</span>${p.id === s.hostId ? '<i class="crown">♛</i>' : ""}${
+              `<div class="lobby-player ${p.id === pid ? "me" : ""}">${
+                p.id === pid ? `<button class="avatar-edit" data-act="pickAvatar" aria-label="Change your picture">${avatar(p)}</button>` : avatar(p)
+              }<span>${esc(p.name)}${p.id === pid ? " (you)" : ""}</span>${p.id === s.hostId ? '<i class="crown">♛</i>' : ""}${
                 isHost && p.bot ? `<button class="remove-bot" data-act="kick" data-pid="${esc(p.id)}" aria-label="Remove ${esc(p.name)}">×</button>` : ""
               }</div>`,
           )
@@ -498,7 +514,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
       <div class="ph-lobby-inner">
         <h2>${won ? (s.gameWinner ? "You win! 🏆" : "You went out! 🎉") : `${esc(playerName(s.roundWinner))} ${s.gameWinner ? "wins!" : "went out"}`}</h2>
         <p class="muted">+${s.roundPoints} points</p>
-        <div class="mini-scores">${ranked.map((p) => `<div>${avatar(p, "xs")}<span>${esc(p.name)}</span><b>${p.score}</b></div>`).join("")}</div>
+        <div class="mini-scores">${ranked.map((p) => `<div>${avatar(p, "xs")}<span class="name">${esc(p.name)}</span><b>${p.score}</b></div>`).join("")}</div>
         ${
           isHost
             ? `<button class="btn btn-primary btn-xl wide" data-act="next">${s.gameWinner ? "New game" : "Deal next round"}</button>
@@ -522,7 +538,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
       <h4>Players</h4>
       <div class="host-players">${s.players
         .map(
-          (p) => `<div class="host-player ${p.connected ? "" : "offline"}">${avatar(p, "xs")}<span>${esc(p.name)}${p.connected ? "" : " · offline"}</span>${
+          (p) => `<div class="host-player ${p.connected ? "" : "offline"}">${avatar(p, "xs")}<span class="name">${esc(p.name)}${p.connected ? "" : " · offline"}</span>${
             p.id === pid ? "<em>you</em>" : `<button class="btn btn-small btn-danger" data-act="kick" data-pid="${esc(p.id)}">Remove</button>`
           }</div>`,
         )

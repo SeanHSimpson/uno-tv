@@ -65,7 +65,7 @@ export class Room extends Server<Env> {
     }
     conn.setState({ role: "player", pid });
     try {
-      const events = engine.joinPlayer(this.game, pid, url.searchParams.get("name"));
+      const events = engine.joinPlayer(this.game, pid, url.searchParams.get("name"), Math.random, url.searchParams.get("avatar"));
       await this.commit(events);
     } catch (err) {
       this.send(conn, { t: "fatal", message: errorMessage(err) });
@@ -136,6 +136,8 @@ export class Room extends Server<Env> {
         return engine.skipCurrent(g, pid);
       case "addBot":
         return engine.addBot(g, pid);
+      case "avatar":
+        return engine.setAvatar(g, pid, m.avatar);
       case "rename": {
         const p = g.players.find((x) => x.id === pid);
         if (p) p.name = engine.cleanName(m.name);
