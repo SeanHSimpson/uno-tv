@@ -231,3 +231,22 @@ export function findContract(cards: PCard[], need: Contract, useAll: boolean): M
   pick(0, new Set(), 0, 0);
   return result;
 }
+
+/**
+ * The biggest piece of a contract these cards make, using every card (for laying down in
+ * parts). Returns the melds and how much of the contract they cover, or null.
+ */
+export function partOfContract(cards: PCard[], need: Contract): { melds: MeldShape[]; used: Contract } | null {
+  let best: { melds: MeldShape[]; used: Contract } | null = null;
+  for (let s = need.sets; s >= 0; s--) {
+    for (let r = need.runs; r >= 0; r--) {
+      if (s + r === 0) continue;
+      if (best && s + r <= best.used.sets + best.used.runs) continue;
+      const melds = findContract(cards, { sets: s, runs: r }, true);
+      if (melds) best = { melds, used: { sets: s, runs: r } };
+    }
+  }
+  return best;
+}
+
+export const contractLeft = (c: Contract, laid: Contract): Contract => ({ sets: c.sets - laid.sets, runs: c.runs - laid.runs });

@@ -3874,3 +3874,467 @@ body.theme-mi .ph-results {
   letter-spacing: 0.06em;
   z-index: 1;
 }
+
+/* =====================================================================
+   ARRANGING YOUR HAND (rummy & euchre phones), TABLE GLANCE, TV CARD SIZE
+   ===================================================================== */
+.hand-toolbar {
+  padding: 6px 16px 0;
+}
+.hand-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.hand-tools .seg {
+  flex: 1 1 auto;
+}
+.hand-tools .seg button {
+  padding: 7px 2px;
+  font-size: 0.8rem;
+}
+.tool-btn {
+  border: 0;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--cream);
+  font-weight: 800;
+  font-size: 0.8rem;
+  padding: 10px 10px;
+  white-space: nowrap;
+}
+.tool-btn:active {
+  background: rgba(255, 246, 230, 0.15);
+}
+.seg.wide {
+  width: 100%;
+}
+
+/* Fanned like a real hand: a grid whose columns are narrower than the cards. */
+.hand.fan {
+  grid-template-columns: var(--fan-cols);
+  grid-template-rows: var(--fan-rows, auto);
+  gap: 0;
+  padding-top: 26px;
+}
+.hand.fan > .pcard {
+  justify-self: start;
+  rotate: var(--rot, 0deg);
+  top: var(--dip, 0px);
+  transform-origin: 50% 115%;
+}
+.hand-card.reorder-drag {
+  z-index: 30;
+  transition: none;
+  scale: 1.08;
+  filter: drop-shadow(0 0 0 var(--amber)) drop-shadow(0 0 8px var(--amber)) drop-shadow(0 16px 16px rgba(0, 0, 0, 0.5));
+}
+.hand.reordering .hand-card:not(.reorder-drag) {
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.25, 1),
+    rotate 0.18s,
+    top 0.18s;
+}
+
+/* Rummy: some of the contract is down (the "lay down in parts" rule) */
+.rm-part {
+  background: var(--amber);
+  color: var(--ink);
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 0.2em 0.7em;
+  font-size: 0.8em;
+  white-space: nowrap;
+}
+
+/* The table, from your phone */
+.glance-sheet {
+  max-height: 92dvh;
+}
+.glance-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+}
+.glance-top small {
+  color: var(--muted);
+  font-weight: 700;
+}
+.glance-top .s-H,
+.glance-top .s-D {
+  color: #ff8a7a;
+}
+.glance-discard {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: right;
+}
+.glance-card {
+  --cw: 46px;
+}
+.glance-players {
+  display: grid;
+  gap: 10px;
+}
+.glance-player {
+  background: rgba(255, 246, 230, 0.06);
+  border-radius: 14px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+.glance-player.turn {
+  box-shadow: inset 0 0 0 2px var(--amber);
+}
+.glance-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.glance-who small {
+  color: var(--muted);
+  font-weight: 700;
+  flex: 1;
+}
+.glance-melds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.glance-meld {
+  display: flex;
+  align-items: center;
+  padding-right: 16px;
+}
+.glance-meld .glance-card {
+  margin-right: -16px;
+}
+.glance-meld .rm-kind {
+  font-size: 0.62rem;
+}
+.glance-table {
+  display: grid;
+  grid-template-areas:
+    ". across ."
+    "left . right"
+    ". me .";
+  grid-template-columns: 1fr 1fr 1fr;
+  justify-items: center;
+  align-items: center;
+  gap: 2px;
+}
+.glance-spot {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  text-align: center;
+}
+.glance-spot small {
+  color: var(--muted);
+}
+.glance-spot.across {
+  grid-area: across;
+}
+.glance-spot.left {
+  grid-area: left;
+}
+.glance-spot.right {
+  grid-area: right;
+}
+.glance-spot.me {
+  grid-area: me;
+}
+.glance-ecard {
+  --cw: 80px;
+}
+.glance-empty {
+  width: 80px;
+  aspect-ratio: 2 / 3;
+  border-radius: 9px;
+  border: 2px dashed rgba(251, 245, 232, 0.22);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.glance-spot.turn .glance-empty {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.glance-spot.win .pcard,
+.glance-last span.win .pcard {
+  filter: drop-shadow(0 0 8px #f2b544);
+}
+.glance-last {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+.glance-last small {
+  color: var(--muted);
+  font-weight: 800;
+}
+.glance-last > div {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.glance-last span {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  font-size: 0.72rem;
+}
+.glance-last em {
+  font-style: normal;
+  color: var(--muted);
+  font-weight: 700;
+}
+.glance-mini {
+  --cw: 46px;
+}
+
+/* TV card size (the host's "Cards on the TV" setting, --ts) */
+.rummy-tv .rm-mini {
+  --cw: calc(7.4vmin * var(--ts, 1));
+  margin-right: calc(-2.7vmin * var(--ts, 1));
+}
+.rummy-tv .rm-meld {
+  padding-right: calc(3vmin * var(--ts, 1));
+}
+.rummy-tv .rm-boards {
+  grid-template-columns: repeat(auto-fit, minmax(max(calc(38vmin * min(var(--ts, 1), 1.6)), calc((100% - 6vmin) / 4)), 1fr));
+}
+.euchre-tv .eu-slot {
+  margin-left: calc(-5.25vmin * var(--ts, 1));
+  margin-top: calc(-7.9vmin * var(--ts, 1));
+}
+.euchre-tv .eu-slot .pcard {
+  --cw: calc(10.5vmin * var(--ts, 1));
+}
+/* Bigger cards spread sideways more than up and down, so they stay clear of the seats. */
+.euchre-tv .eu-slot.pos-bottom {
+  transform: translate(0, calc(7vmin * min(var(--ts, 1), 1) - 1.4vmin * (var(--ts, 1) - 1))) rotate(2deg);
+}
+.euchre-tv .eu-slot.pos-top {
+  transform: translate(0, calc(-7vmin * min(var(--ts, 1), 1) + 1.4vmin * (var(--ts, 1) - 1))) rotate(-3deg);
+}
+.euchre-tv .eu-slot.pos-left {
+  transform: translate(calc(-14vmin * var(--ts, 1) + 1vmin), 0) rotate(-8deg);
+}
+.euchre-tv .eu-slot.pos-right {
+  transform: translate(calc(14vmin * var(--ts, 1) - 1vmin), 0) rotate(7deg);
+}
+.euchre-tv .eu-kitty .pcard {
+  --cw: calc(12vmin * min(var(--ts, 1), 1.3));
+}
+
+/* Euchre: picking partners */
+.euchre-phone.picking > :not(#eu-teams):not(.sheet):not(.overlay) {
+  display: none !important;
+}
+.eu-ph-teams {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 16px 16px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  text-align: center;
+}
+.eu-ph-teams h2 {
+  font-family: var(--font-display);
+  margin: 0;
+}
+.eu-ph-teams p {
+  margin: 0;
+}
+.eu-pick {
+  border-radius: 18px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  box-shadow: inset 0 0 0 2px rgba(251, 245, 232, 0.12);
+}
+.eu-pick.t0 {
+  background: linear-gradient(180deg, rgba(240, 129, 47, 0.3), rgba(9, 22, 30, 0.65));
+}
+.eu-pick.t1 {
+  background: linear-gradient(180deg, rgba(79, 179, 227, 0.28), rgba(9, 22, 30, 0.65));
+}
+.eu-pick.mine {
+  box-shadow: inset 0 0 0 3px var(--amber);
+}
+.eu-pick h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+.eu-pick-slots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.eu-pick-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 46px;
+  border-radius: 12px;
+  background: rgba(251, 245, 232, 0.12);
+  border: 0;
+  color: var(--cream);
+  font: inherit;
+  font-weight: 800;
+  padding: 6px 8px;
+  font-size: 0.9rem;
+  min-width: 0;
+}
+.eu-pick-chip span:not(.avatar):not(.bot-tag) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.eu-pick-chip.empty {
+  background: transparent;
+  border: 2px dashed rgba(251, 245, 232, 0.25);
+  color: var(--muted);
+}
+.eu-pick-chip.move i {
+  font-style: normal;
+  opacity: 0.6;
+  margin-left: auto;
+}
+.eu-pick-undecided {
+  display: grid;
+  gap: 6px;
+}
+.eu-pick-undecided > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.eu-pick-undecided small {
+  color: var(--muted);
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+.eu-pick-host {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+}
+.euchre-tv.picking > .eu-scores,
+.euchre-tv.picking > .eu-table,
+.euchre-tv.picking > .ticker {
+  visibility: hidden;
+}
+.eu-teams-tv {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 2.6vmin;
+  text-align: center;
+  padding: 2vmin 6vmin;
+}
+.eu-teams-tv h1 {
+  font-family: var(--font-display);
+  font-size: 6.4vmin;
+  margin: 0;
+}
+.eu-teams-tv > p {
+  margin: 0;
+  font-size: 2.5vmin;
+  opacity: 0.85;
+}
+.eu-pick-tv-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4vmin;
+}
+.eu-pick-tv-vs {
+  align-self: center;
+}
+.eu-pick-tv {
+  min-width: 54vmin;
+  border-radius: 3vmin;
+  padding: 2.6vmin 3vmin 3vmin;
+  box-shadow: inset 0 0 0 0.3vmin rgba(251, 245, 232, 0.2);
+}
+.eu-pick-tv.t0 {
+  background: linear-gradient(180deg, rgba(240, 129, 47, 0.35), rgba(9, 22, 30, 0.8));
+}
+.eu-pick-tv.t1 {
+  background: linear-gradient(180deg, rgba(79, 179, 227, 0.3), rgba(9, 22, 30, 0.8));
+}
+.eu-pick-tv h2 {
+  font-family: var(--font-display);
+  font-size: 4.6vmin;
+  margin: 0 0 2.4vmin;
+}
+.eu-pick-tv-slots {
+  display: flex;
+  justify-content: center;
+  gap: 5vmin;
+}
+.eu-pick-tv-who {
+  display: grid;
+  justify-items: center;
+  gap: 1.2vmin;
+  font-size: 2.8vmin;
+  min-width: 18vmin;
+}
+.eu-pick-tv-who.empty {
+  opacity: 0.55;
+}
+.eu-pick-tv-open {
+  display: grid;
+  place-items: center;
+  width: 12vmin;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 0.4vmin dashed rgba(251, 245, 232, 0.6);
+  font-size: 5vmin;
+  font-family: var(--font-display);
+}
+.eu-pick-tv-vs {
+  font-family: var(--font-display);
+  font-size: 4.4vmin;
+  opacity: 0.6;
+}
+.eu-pick-tv-undecided {
+  display: flex;
+  gap: 2.4vmin;
+  align-items: center;
+  font-size: 2.5vmin;
+  font-weight: 800;
+}
+.eu-pick-tv-undecided small {
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.eu-pick-tv-undecided span {
+  display: flex;
+  align-items: center;
+  gap: 0.8vmin;
+}
+.hand.fan {
+  align-content: end;
+  padding-bottom: 18px;
+}
+.rummy-tv .rm-boards {
+  padding: 0.4vmin 0.4vmin 0.8vmin;
+}

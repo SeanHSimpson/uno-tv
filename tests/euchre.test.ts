@@ -15,6 +15,7 @@ function seeded(seed: number) {
   };
 }
 const members = (n: number): Member[] => Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, hue: i, connected: true }));
+const RANDOM: E.EuchreSettings = { ...E.EUCHRE_DEFAULTS, teams: "random" };
 let nid = 900;
 const c = (s: string): E.ECard => {
   const rank = { A: 1, K: 13, Q: 12, J: 11, T: 10, "9": 9 }[s[0]!]!;
@@ -23,7 +24,7 @@ const c = (s: string): E.ECard => {
 
 /** A fresh game with seats in member order (p0..p3), dealer seat 3, so seat 0 bids first. */
 function table(seed = 1) {
-  const { state } = E.newEuchre(members(4), E.EUCHRE_DEFAULTS, "p0", seeded(seed));
+  const { state } = E.newEuchre(members(4), RANDOM, "p0", seeded(seed));
   const byId = (id: string) => state.players.find((p) => p.id === id)!;
   state.players = ["p0", "p1", "p2", "p3"].map(byId);
   state.dealer = 3;
@@ -58,13 +59,13 @@ describe("Euchre cards", () => {
   });
 
   it("deals 5 each with one card turned up, and the first bid is left of the dealer", () => {
-    const { state, events } = E.newEuchre(members(4), E.EUCHRE_DEFAULTS, "p0", seeded(4));
+    const { state, events } = E.newEuchre(members(4), RANDOM, "p0", seeded(4));
     expect(state.players.every((p) => p.hand.length === 5)).toBe(true);
     expect(state.upcard).toBeTruthy();
     expect(state.kitty).toHaveLength(3);
     expect(state.turn).toBe((state.dealer + 1) % 4);
     expect(events[0]).toMatchObject({ type: "deal" });
-    expect(() => E.newEuchre(members(3), E.EUCHRE_DEFAULTS, "p0", seeded(1))).toThrow(/exactly 4/);
+    expect(() => E.newEuchre(members(3), RANDOM, "p0", seeded(1))).toThrow(/exactly 4/);
   });
 });
 
@@ -229,7 +230,7 @@ describe("Euchre bots and the room", () => {
     for (let seed = 1; seed <= 60; seed++) {
       const rng = seeded(seed);
       const ctx = { isHost: true, hostId: "p0", rng };
-      const { state: s } = euchre.start(members(4), { target: 10, stick: seed % 2 === 0 }, ctx);
+      const { state: s } = euchre.start(members(4), { target: 10, stick: seed % 2 === 0, teams: "random", table: 1 }, ctx);
       let steps = 0;
       while (s.phase !== "gameOver") {
         if (++steps > 4000) throw new Error(`stalled on seed ${seed} in ${s.phase}`);
@@ -252,6 +253,61 @@ describe("Euchre bots and the room", () => {
       }
       expect(Math.max(...s.score)).toBeGreaterThanOrEqual(10);
     }
+  });
+
+  it("picking partners: choose sides, the host fills the rest, partners sit across", () => {
+    const rng = seeded(3);
+    const ctx = (pid: string) => ({ isHost: pid === "p0", hostId: "p0", rng });
+    const { state: s, events } = euchre.start(members(4), { ...E.EUCHRE_DEFAULTS }, ctx("p0"));
+    expect(s.phase).toBe("teams");
+    expect(events).toEqual([{ type: "teams" }]);
+    expect(euchre.nextBot(s, ctx("p0"))).toBeNull();
+    euchre.action(s, "p1", { t: "team", team: 0 }, ctx("p1"));
+    euchre.action(s, "p3", { t: "team", team: 0 }, ctx("p3"));
+    expect(() => euchre.action(s, "p2", { t: "team", team: 0 }, ctx("p2"))).toThrow(/full/);
+    expect(() => euchre.action(s, "p2", { t: "team", team: 1, pid: "p1" }, ctx("p2"))).toThrow(/Only the host/);
+    expect(() => euchre.action(s, "p1", { t: "deal" }, ctx("p1"))).toThrow(/host/);
+    // The host deals: p0 and p2 haven't picked, so they become the other team.
+    euchre.action(s, "p0", { t: "deal" }, ctx("p0"));
+    expect(s.phase).toBe("bid1");
+    const seatOf = (id: string) => s.players.findIndex((p) => p.id === id);
+    expect(seatOf("p1") % 2).toBe(seatOf("p3") % 2);
+    expect(Math.abs(seatOf("p1") - seatOf("p3"))).toBe(2);
+    expect(seatOf("p0") % 2).toBe(seatOf("p2") % 2);
+    expect(() => euchre.action(s, "p0", { t: "team", team: 1 }, ctx("p0"))).toThrow(/already set/);
+
+    // Game over, play again: back to the teams screen with the same sides ready.
+    s.phase = "gameOver";
+    s.winnerTeam = 0;
+    euchre.action(s, "p0", { t: "restart" }, ctx("p0"));
+    expect(s.phase).toBe("teams");
+    expect(s.picks.p1).toBe(s.picks.p3);
+    euchre.action(s, "p0", { t: "team", team: null, pid: "p1" }, ctx("p0"));
+    expect(s.picks.p1).toBeUndefined();
+    euchre.action(s, "p0", { t: "shuffleTeams" }, ctx("p0"));
+    expect(Object.keys(s.picks)).toHaveLength(4);
+    euchre.action(s, "p0", { t: "deal" }, ctx("p0"));
+    expect(s.phase).toBe("bid1");
+    expect(s.score).toEqual([0, 0]);
+  });
+
+  it("remembers the last trick and lets the host resize the TV cards", () => {
+    const s = table(5);
+    s.phase = "play";
+    s.trump = "H";
+    s.turn = 0;
+    for (let k = 0; k < 4; k++) {
+      const pid = s.players[s.turn]!.id;
+      const [a] = euchre.botActions(s, pid, { isHost: true, hostId: "p0", rng: seeded(k) });
+      euchre.action(s, pid, a!, { isHost: true, hostId: "p0", rng: seeded(k) });
+    }
+    E.collect(s);
+    const v = E.publicView(s);
+    expect(v.lastTrick).toHaveLength(4);
+    expect(v.lastTrickWinner).toBeTruthy();
+    expect(() => E.setTable(s, false, 1.55)).toThrow(/host/);
+    E.setTable(s, true, 1.55);
+    expect(E.publicView(s).table).toBe(1.55);
   });
 
   it("the room needs exactly 4; someone leaving mid-game gets a bot stand-in", () => {

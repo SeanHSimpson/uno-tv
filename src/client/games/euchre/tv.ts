@@ -52,6 +52,7 @@ export function euchreTv(ctx: TvCtx): GameView {
     </div>
     <footer class="ticker"><div class="ticker-main" id="eu-turn"></div><div class="ticker-sub" id="eu-log"></div></footer>
     <section class="eu-banner" id="eu-banner" hidden></section>
+    <section class="eu-teams-tv" id="eu-teams" hidden></section>
     <section class="tv-results overlay" id="eu-results" hidden></section>
   </div>`;
 
@@ -67,6 +68,17 @@ export function euchreTv(ctx: TvCtx): GameView {
   }
 
   function render(s: EuchrePublic, prev: EuchrePublic | null) {
+    const root = ctx.el.querySelector<HTMLElement>(".euchre-tv")!;
+    root.style.setProperty("--ts", String(s.table || 1));
+    const picking = s.phase === "teams";
+    root.classList.toggle("picking", picking);
+    $("#eu-teams").hidden = !picking;
+    if (picking) {
+      ctx.setStatus(`Euchre · choosing sides · first to ${s.target}`);
+      renderTeams(s);
+      renderResults(s);
+      return;
+    }
     ctx.setStatus(`Euchre · Hand <b>${s.hand}</b> · first to ${s.target}`);
     renderScores(s);
     renderCenter(s);
@@ -79,6 +91,31 @@ export function euchreTv(ctx: TvCtx): GameView {
     } else if (s.trickWinner) $("#eu-turn").innerHTML = `<b>${name(s.trickWinner)}</b> takes the trick`;
     renderBanner(s);
     renderResults(s);
+  }
+
+  /** Before the deal: two teams filling up as people pick on their phones. */
+  function renderTeams(s: EuchrePublic) {
+    const team = (t: 0 | 1) => {
+      const members = s.players.filter((p) => s.picks[p.id] === t);
+      return `<div class="eu-pick-tv t${t}">
+        <h2>${TEAM_EMOJI[t]} ${TEAM_NAMES[t]}</h2>
+        <div class="eu-pick-tv-slots">${[0, 1]
+          .map((i) => {
+            const p = members[i];
+            return p
+              ? `<div class="eu-pick-tv-who">${avatar(p, "xl")}<b>${esc(p.name)}</b>${p.bot ? '<span class="bot-tag">bot</span>' : ""}</div>`
+              : `<div class="eu-pick-tv-who empty"><span class="eu-pick-tv-open">?</span><b>Open seat</b></div>`;
+          })
+          .join("")}</div>
+      </div>`;
+    };
+    const undecided = s.players.filter((p) => s.picks[p.id] === undefined);
+    $("#eu-teams").innerHTML = `
+      <h1>Pick your partner</h1>
+      <p>Choose a team on your phone. Partners sit across the table from each other.</p>
+      <div class="eu-pick-tv-row">${team(0)}<div class="eu-pick-tv-vs">vs</div>${team(1)}</div>
+      ${undecided.length ? `<div class="eu-pick-tv-undecided"><small>Still choosing</small>${undecided.map((p) => `<span>${avatar(p, "sm")}${esc(p.name)}</span>`).join("")}</div>` : ""}
+      <p class="results-next">The host deals from their phone when the teams are set (or press <kbd>Enter</kbd> here). Anyone who hasn't picked fills an open seat.</p>`;
   }
 
   function renderScores(s: EuchrePublic) {
@@ -269,6 +306,9 @@ export function euchreTv(ctx: TvCtx): GameView {
         case "standIn":
           log.push(`A bot is keeping ${name(e.pid)}'s seat warm`);
           break;
+        case "picked":
+          audio.tick();
+          break;
       }
     }
     if (log.length) $("#eu-log").innerHTML = log.slice(-3).join(" <span class='dot'>•</span> ");
@@ -278,6 +318,7 @@ export function euchreTv(ctx: TvCtx): GameView {
     update,
     onEnter() {
       if (state?.phase === "gameOver") ctx.send({ t: "restart" });
+      else if (state?.phase === "teams") ctx.send({ t: "deal" });
     },
     destroy() {
       alive = false;

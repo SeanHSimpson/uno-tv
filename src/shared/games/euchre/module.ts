@@ -24,6 +24,8 @@ export const euchre: GameModule<E.EuchreState, E.EuchreSettings, E.EuchreAction,
   settings: [
     { key: "target", label: "Play to", options: [{ value: 10, label: "10 points" }, { value: 5, label: "5 (quick)" }] },
     { key: "stick", label: "Stick the dealer", options: [{ value: true, label: "On" }, { value: false, label: "Off (redeal)" }] },
+    { key: "teams", label: "Teams", options: [{ value: "pick", label: "Pick partners" }, { value: "random", label: "Random" }] },
+    { key: "table", label: "Cards on the TV", options: [{ value: 1, label: "Normal" }, { value: 1.3, label: "Big" }, { value: 1.55, label: "Huge" }] },
   ],
   defaultSettings: { ...E.EUCHRE_DEFAULTS },
 
@@ -50,6 +52,14 @@ export const euchre: GameModule<E.EuchreState, E.EuchreSettings, E.EuchreAction,
         return E.nextHand(s, ctx.rng);
       case "restart":
         return E.restart(s, ctx.isHost, ctx.rng);
+      case "team":
+        return E.pickTeam(s, pid, ctx.isHost, a.team, a.pid);
+      case "shuffleTeams":
+        return E.shuffleTeams(s, ctx.isHost, ctx.rng);
+      case "deal":
+        return E.dealTeams(s, ctx.isHost, ctx.rng);
+      case "table":
+        return E.setTable(s, ctx.isHost, Number(a.size));
       case "autoplay": {
         // The host nudges a stuck player: a bot makes their move for them.
         if (!ctx.isHost) fail("Only the host can do that.");
@@ -117,5 +127,5 @@ export const euchre: GameModule<E.EuchreState, E.EuchreSettings, E.EuchreAction,
     if (s.players.every((p) => p.bot)) return "abort";
     return s.phase === "gameOver" ? "over" : "playing";
   },
-  tvActions: ["restart"],
+  tvActions: ["restart", "deal"],
 };

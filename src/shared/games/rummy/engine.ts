@@ -8,14 +8,19 @@
 // turn, ask for the top discard; you get it plus a penalty card from the deck.
 
 import { fail, shuffle, type Member, type Rng } from "../../common";
-import { canAdd, contractLabel, CONTRACTS, findContract, makeDeck, points, type Contract, type MeldShape, type PCard } from "./cards";
+import { canAdd, contractLabel, contractLeft, CONTRACTS, findContract, makeDeck, partOfContract, points, type Contract, type MeldShape, type PCard } from "./cards";
 
 export interface RummySettings extends Record<string, unknown> {
   /** 7 = classic (all contracts), 4 = short game. */
   rounds: number;
   mayI: boolean;
+  /** House rule: lay the contract down a piece at a time (one set now, the run later). */
+  parts: boolean;
+  /** How big the laid-down cards are on the TV (1 = normal). */
+  table: number;
 }
-export const RUMMY_DEFAULTS: RummySettings = { rounds: 7, mayI: true };
+export const RUMMY_DEFAULTS: RummySettings = { rounds: 7, mayI: true, parts: false, table: 1.5 };
+export const TABLE_SIZES = [1, 1.5, 2];
 const SHORT_CONTRACTS = [0, 1, 2, 6]; // 2 sets, set+run, 2 runs, 3 runs
 const MAX_BUYS = 3;
 
@@ -33,6 +38,8 @@ export interface RummyPlayer {
   connected: boolean;
   hand: PCard[];
   down: boolean;
+  /** How much of the contract they've laid down so far (all of it once they're down). */
+  laid: Contract;
   score: number;
   roundScores: number[];
   buys: number;
@@ -66,7 +73,7 @@ export type RummyEvent =
   | { type: "draw"; pid: string; from: "stock" | "discard"; card?: PCard }
   | { type: "mayI"; pid: string }
   | { type: "bought"; pid: string; card: PCard }
-  | { type: "down"; pid: string; melds: number[] }
+  | { type: "down"; pid: string; melds: number[]; partial?: boolean }
   | { type: "hit"; pid: string; meldId: number; cards: PCard[] }
   | { type: "discard"; pid: string; card: PCard }
   | { type: "reshuffle" }
@@ -80,7 +87,8 @@ export type RummyAction =
   | { t: "discard"; cardId: number }
   | { t: "mayI" }
   | { t: "skip" }
-  | { t: "nextRound" };
+  | { t: "nextRound" }
+  | { t: "table"; size: number };
 
 /** 10 cards for the first four contracts, 12 for the bigger ones (3 runs needs at least 12). */
 export const handSize = (contractIndex: number) => (contractIndex >= 4 ? 12 : 10);
@@ -105,6 +113,7 @@ export function newRummy(members: Member[], settings: RummySettings, hostId: str
       connected: m.connected,
       hand: [],
       down: false,
+      laid: { sets: 0, runs: 0 },
       score: 0,
       roundScores: [],
       buys: 0,
@@ -139,6 +148,7 @@ function deal(s: RummyState, rng: Rng): RummyEvent[] {
   for (const p of s.players) {
     p.hand = sortHand(s.stock.splice(0, n));
     p.down = false;
+    p.laid = { sets: 0, runs: 0 };
     p.buys = 0;
   }
   s.discard.push(s.stock.pop()!);
@@ -240,24 +250,45 @@ export function layDown(s: RummyState, pid: string, cardIds: number[]): RummyEve
   const contract = contractOf(s);
   const final = isFinalContract(contract);
   if (final && cards.length !== p.hand.length) fail("Last round: lay down your whole hand at once (3 runs, no discard).");
-  const melds = findContract(cards, contract, true);
-  if (!melds) fail(`Those cards don't make ${contractLabel(contract)}.`);
+  const left = contractLeft(contract, p.laid);
+  let melds = findContract(cards, left, true);
+  let used = left;
+  if (!melds && canLayParts(s)) {
+    const part = partOfContract(cards, left);
+    if (part) [melds, used] = [part.melds, part.used];
+  }
+  if (!melds) {
+    if (canLayParts(s)) return fail(`Those cards don't make a group you still need (${contractLabel(left)}).`);
+    return fail(`Those cards don't make ${contractLabel(contract)}.`);
+  }
   removeFromHand(p, cards);
-  p.down = true;
+  p.laid = { sets: p.laid.sets + used.sets, runs: p.laid.runs + used.runs };
+  p.down = p.laid.sets >= contract.sets && p.laid.runs >= contract.runs;
   const ids: number[] = [];
-  for (const m of melds!) {
+  for (const m of melds) {
     const meld: Meld = { ...m, id: s.nextMeldId++, owner: pid };
     s.melds.push(meld);
     ids.push(meld.id);
   }
-  const events: RummyEvent[] = [{ type: "down", pid, melds: ids }];
+  const events: RummyEvent[] = [{ type: "down", pid, melds: ids, partial: !p.down }];
   return events.concat(checkOut(s, p));
+}
+
+/** The "lay down in parts" house rule (never in the last round, which goes out all at once). */
+export const canLayParts = (s: RummyState) => !!s.settings.parts && !isFinalContract(contractOf(s));
+
+/** The host changes how big the laid-down cards look on the TV. */
+export function setTable(s: RummyState, isHost: boolean, size: number): RummyEvent[] {
+  if (!isHost) fail("Only the host can change that.");
+  if (!TABLE_SIZES.includes(size)) fail("That size isn't available.");
+  s.settings.table = size;
+  return [];
 }
 
 /** Add cards to any group on the table (only once you're down yourself). */
 export function hit(s: RummyState, pid: string, cardIds: number[], meldId: number): RummyEvent[] {
   const p = requireTurn(s, pid, "play");
-  if (!p.down) fail("Lay down your own contract before adding to groups.");
+  if (!p.down) fail(p.laid.sets + p.laid.runs ? "Lay down the rest of your contract before adding to groups." : "Lay down your own contract before adding to groups.");
   if (isFinalContract(contractOf(s))) fail("Last round: there's no adding to groups.");
   const meld = s.melds.find((m) => m.id === Number(meldId)) ?? fail("That group isn't on the table.");
   const cards = takeFromHand(p, cardIds);
@@ -323,7 +354,7 @@ export function addPlayer(s: RummyState, m: Member): RummyEvent[] {
   if (s.players.some((p) => p.id === m.id)) return [];
   // New players sit out the current round and join at the next deal, with the highest score so far.
   const worst = Math.max(0, ...s.players.map((p) => p.score));
-  s.players.push({ id: m.id, name: m.name, hue: m.hue, avatar: m.avatar, bot: m.bot, connected: m.connected, hand: [], down: false, score: worst, roundScores: [], buys: 0 });
+  s.players.push({ id: m.id, name: m.name, hue: m.hue, avatar: m.avatar, bot: m.bot, connected: m.connected, hand: [], down: false, laid: { sets: 0, runs: 0 }, score: worst, roundScores: [], buys: 0 });
   return [];
 }
 
@@ -367,6 +398,8 @@ export function publicView(s: RummyState) {
     contractText: contractLabel(contract),
     plan: s.plan.map((i) => contractLabel(CONTRACTS[i]!)),
     finalRound: isFinalContract(contract),
+    parts: canLayParts(s),
+    table: s.settings.table ?? 1,
     turnId: s.phase === "playing" ? current(s).id : null,
     stage: s.stage,
     stockCount: s.stock.length,
@@ -386,6 +419,8 @@ export function publicView(s: RummyState) {
       connected: p.connected,
       count: p.hand.length,
       down: p.down,
+      /** Some of their contract is on the table, but not all of it yet. */
+      partial: !p.down && p.laid.sets + p.laid.runs > 0,
       score: p.score,
       roundScores: p.roundScores,
       buys: p.buys,
@@ -403,6 +438,8 @@ export function privateView(s: RummyState, pid: string) {
     pid,
     hand: p.hand,
     down: p.down,
+    /** What's still left of the contract to lay down. */
+    left: contractLeft(contractOf(s), p.laid),
     myTurn: mine,
     canDraw: mine && s.stage === "draw",
     canPlay: mine && s.stage === "play",

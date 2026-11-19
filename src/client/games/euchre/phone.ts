@@ -1,11 +1,13 @@
 // Euchre on a phone: your five cards, a little table showing the trick so far, and the
 // bidding buttons (order up / pass / name a suit / go alone) when it's your call.
 
-import type { EuchreEvent, EuchrePrivate, EuchrePublic, Suit } from "../../../shared/games/euchre/engine";
-import { shortCard, SUIT_NAMES, TEAM_EMOJI, TEAM_NAMES } from "../../../shared/games/euchre/engine";
+import type { ECard, EuchreEvent, EuchrePrivate, EuchrePublic, Suit } from "../../../shared/games/euchre/engine";
+import { effSuit, power, shortCard, SUIT_NAMES, SUITS, TEAM_EMOJI, TEAM_NAMES } from "../../../shared/games/euchre/engine";
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
+import { attachReorder, fitHand, HandArranger } from "../../handArrange";
 import { $, avatar, esc, toast } from "../../ui";
+import { tableSizeMenu } from "../tableSize";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
 import { ecardEl, ecardHtml, suitIcon } from "./cards";
 
@@ -19,14 +21,29 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
   let alone = false;
   let wasMyTurn = false;
   document.body.classList.add("theme-mi");
+  const RANK_ORDER: Record<number, number> = { 1: 6, 13: 5, 12: 4, 11: 3, 10: 2, 9: 1 };
+  const trumpNow = () => state?.trump ?? null;
+  // "Suit": trump first (bowers on top), then the other suits. "Rank": aces down to nines.
+  const suitKey = (c: ECard) => (effSuit(c, trumpNow()) === trumpNow() ? 0 : 1 + SUITS.indexOf(c.suit));
+  const arranger = new HandArranger<ECard>(
+    "euchre",
+    {
+      suit: (a, b) => suitKey(a) - suitKey(b) || power(b, trumpNow(), effSuit(b, trumpNow())) - power(a, trumpNow(), effSuit(a, trumpNow())),
+      rank: (a, b) => RANK_ORDER[b.rank]! - RANK_ORDER[a.rank]! || SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit),
+    },
+    "suit",
+  );
 
   ctx.el.innerHTML = `
   <div class="euchre-phone">
     <section class="eu-ph-status" id="eu-status"></section>
     <section class="eu-ph-table" id="eu-table"></section>
     <section class="eu-ph-bid" id="eu-bid" hidden></section>
+    <section class="hand-toolbar" id="eu-tools"></section>
     <main class="hand eu-hand" id="eu-hand" aria-label="Your cards"></main>
     <footer class="eu-ph-actions"><button class="btn btn-primary btn-xl" id="eu-act" hidden></button></footer>
+    <section class="eu-ph-teams" id="eu-teams" hidden></section>
+    <section class="sheet glance-sheet" id="eu-glance" hidden></section>
     <section class="ph-results overlay" id="eu-results" hidden></section>
   </div>`;
 
@@ -51,6 +68,28 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     render();
   });
   $("#eu-act").addEventListener("click", () => act());
+  $("#eu-tools").addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const sort = t.closest<HTMLElement>("[data-sort]");
+    if (sort) arranger.setMode(sort.dataset.sort as "rank" | "suit" | "free");
+    else if (t.closest("[data-layout]")) arranger.toggleLayout();
+    else if (t.closest("[data-glance]")) {
+      renderGlance();
+      ctx.openSheet($("#eu-glance"));
+      return;
+    } else return;
+    haptic("select");
+    render();
+  });
+  const reorder = attachReorder(hand, {
+    signal: ac.signal,
+    onMove: () => fitHand(hand, arranger.layout, 130),
+    onDrop: (ids) => {
+      arranger.setOrder(ids);
+      haptic("select");
+      render();
+    },
+  });
   $("#eu-bid").addEventListener("click", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>("[data-bid]");
     if (!b || !me?.myTurn) return;
@@ -101,6 +140,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     wasMyTurn = !!me?.myTurn;
     if (!snap.first) react(snap.events as EuchreEvent[]);
     render();
+    if ($("#eu-glance").classList.contains("open")) renderGlance();
   }
 
   function render() {
@@ -108,6 +148,14 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     const s = state;
     const m = me;
     document.body.classList.toggle("my-turn", m.myTurn);
+    const picking = s.phase === "teams";
+    ctx.el.querySelector(".euchre-phone")!.classList.toggle("picking", picking);
+    $("#eu-teams").hidden = !picking;
+    if (picking) {
+      renderTeams(s, m);
+      renderResults();
+      return;
+    }
     renderStatus(s, m);
     renderTable(s, m);
     renderBid(s, m);
@@ -206,9 +254,85 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     }
   }
 
+  /** Choosing sides before the deal: join a team, and the host can move people or deal. */
+  function renderTeams(s: EuchrePublic, m: EuchrePrivate) {
+    const mine = s.picks[pid];
+    const act = (a: object) => esc(JSON.stringify(a));
+    const chip = (p: EuchrePublic["players"][number], t: 0 | 1 | null) => {
+      const label = `${avatar(p, "xs")}<span>${p.id === pid ? "You" : esc(p.name)}</span>${p.bot ? '<span class="bot-tag">bot</span>' : ""}`;
+      if (!isHost || !m.seated) return `<div class="eu-pick-chip">${label}</div>`;
+      // The host taps anyone to move them: onto the other team, or into a team with room.
+      const to = t === null ? (Object.values(s.picks).filter((x) => x === 0).length < 2 ? 0 : 1) : 1 - t;
+      return `<button class="eu-pick-chip move" data-gact="${act({ t: "team", team: to, pid: p.id })}" aria-label="Move ${esc(p.name)} to ${TEAM_NAMES[to as 0 | 1]}">${label}<i>⇄</i></button>`;
+    };
+    const team = (t: 0 | 1) => {
+      const members = s.players.filter((p) => s.picks[p.id] === t);
+      const slots = [0, 1].map((i) => (members[i] ? chip(members[i]!, t) : `<div class="eu-pick-chip empty">Open seat</div>`)).join("");
+      let btn = "";
+      if (m.seated)
+        btn =
+          mine === t
+            ? `<button class="btn btn-ghost" data-gact="${act({ t: "team", team: null })}">Leave</button>`
+            : `<button class="btn btn-primary" data-gact="${act({ t: "team", team: t })}" ${members.length >= 2 ? "disabled" : ""}>${members.length >= 2 ? "Full" : "Join"}</button>`;
+      return `<div class="eu-pick t${t} ${mine === t ? "mine" : ""}"><h3>${TEAM_EMOJI[t]} ${TEAM_NAMES[t]}</h3><div class="eu-pick-slots">${slots}</div>${btn}</div>`;
+    };
+    const undecided = s.players.filter((p) => s.picks[p.id] === undefined);
+    $("#eu-teams").innerHTML = `
+      <h2>Pick your partner</h2>
+      <p class="muted">Partners sit across from each other. ${mine === undefined ? "Tap a team to join it." : `You're on ${TEAM_EMOJI[mine]} ${TEAM_NAMES[mine]}.`}</p>
+      ${team(0)}${team(1)}
+      ${undecided.length ? `<div class="eu-pick-undecided"><small>Still choosing</small><div>${undecided.map((p) => chip(p, null)).join("")}</div></div>` : ""}
+      ${
+        isHost
+          ? `<p class="muted">${isHost && m.seated ? "Tap a player to move them. " : ""}Anyone who hasn't picked fills an open seat.</p>
+             <div class="eu-pick-host"><button class="btn btn-ghost" data-gact="${act({ t: "shuffleTeams" })}">🎲 Random teams</button>
+             <button class="btn btn-primary btn-xl" data-gact="${act({ t: "deal" })}">Deal ▶</button></div>`
+          : `<p class="muted">The host deals when the teams are set.</p>`
+      }`;
+  }
+
+  /** A bigger look at the table: the trick so far, the last trick, and who's taken what. */
+  function renderGlance() {
+    const s = state;
+    if (!s || s.phase === "teams") return;
+    const mySeat = Math.max(0, s.players.findIndex((p) => p.id === pid));
+    const spots = ["me", "left", "across", "right"];
+    const who = (id: string) => (id === pid ? "You" : esc(s.players.find((p) => p.id === id)?.name ?? ""));
+    const spot = (k: number) => {
+      const p = s.players[(mySeat + k) % 4]!;
+      const t = s.trick.find((x) => x.pid === p.id);
+      return `<div class="glance-spot ${spots[k]} ${s.trickWinner === p.id ? "win" : ""} ${s.turnId === p.id ? "turn" : ""}">
+        ${t ? ecardHtml(t.card, "glance-ecard") : `<div class="glance-empty">${s.outId === p.id ? "sitting out" : s.turnId === p.id ? "thinking…" : ""}</div>`}
+        <span>${who(p.id)} <small>${TEAM_EMOJI[p.team]} ${p.tricks ? `· ${p.tricks} trick${p.tricks === 1 ? "" : "s"}` : ""}</small></span>
+      </div>`;
+    };
+    const maker = s.players.find((p) => p.id === s.makerId);
+    $("#eu-glance").innerHTML = `
+      <h3>The table</h3>
+      <div class="glance-top">
+        ${
+          s.trump
+            ? `<span class="s-${s.trump}">${suitIcon(s.trump, 22, "currentColor")} <b>${SUIT_NAMES[s.trump]}</b> <small>called by ${who(maker?.id ?? "")}${s.alone ? ", alone" : ""}</small></span>`
+            : `<span><b>Bidding</b> <small>${s.upcard && s.phase === "bid1" ? `${shortCard(s.upcard)} turned up` : s.turnedDown ? `${SUIT_NAMES[s.turnedDown]} turned down` : ""}</small></span>`
+        }
+        <span><small>${TEAM_EMOJI[0]}</small> <b>${s.score[0]}</b> · <b>${s.score[1]}</b> <small>${TEAM_EMOJI[1]}</small></span>
+      </div>
+      <div class="glance-table">${[2, 1, 3, 0].map(spot).join("")}</div>
+      ${
+        s.lastTrick.length
+          ? `<div class="glance-last"><small>Last trick · ${who(s.lastTrickWinner ?? "")} took it</small><div>${s.lastTrick
+              .map((t) => `<span class="${t.pid === s.lastTrickWinner ? "win" : ""}">${ecardHtml(t.card, "glance-mini")}<em>${who(t.pid)}</em></span>`)
+              .join("")}</div></div>`
+          : ""
+      }
+      <button class="btn btn-ghost wide" data-close>Back to my cards</button>`;
+  }
+
   function renderHand(m: EuchrePrivate) {
+    $("#eu-tools").innerHTML = arranger.toolbar({ glance: "👀 Table" });
+    if (reorder.dragging()) return;
     hand.replaceChildren(
-      ...m.hand.map((c) => {
+      ...arranger.arrange(m.hand).map((c) => {
         const el = ecardEl(c, "hand-card");
         const usable = m.myTurn && (m.canDiscard || m.legal.includes(c.id));
         el.classList.toggle("selected", selected === c.id);
@@ -225,21 +349,8 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     suit === trump || (rank === 11 && (suit === "H" || suit === "D") === (trump === "H" || trump === "D"));
 
   function layoutHand() {
-    if (!me) return;
-    const n = Math.max(1, me.hand.length);
-    const cs = getComputedStyle(hand);
-    const W = hand.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8;
-    const H = hand.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 16;
-    const gap = 6;
-    let best = { w: 0, cols: 1 };
-    for (let cols = 1; cols <= n; cols++) {
-      const rows = Math.ceil(n / cols);
-      const w = Math.min((W - gap * (cols - 1)) / cols, (H - gap * (rows - 1)) / rows / 1.5);
-      if (w > best.w) best = { w, cols };
-    }
-    hand.style.setProperty("--cw", `${Math.floor(Math.min(best.w, 130))}px`);
-    hand.style.setProperty("--cols", String(best.cols));
-    hand.style.setProperty("--gap", `${gap}px`);
+    if (!me || reorder.dragging()) return;
+    fitHand(hand, arranger.layout, 130);
   }
 
   function renderResults() {
@@ -276,6 +387,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
       if (e.type === "deal") {
         audio.shuffle();
         selected = null;
+        arranger.reset();
       }
       if (e.type === "play" && e.pid === pid) audio.cardPlay("normal");
       if (e.type === "pickup" && e.pid === pid) toast(`You picked up the ${shortCard(e.card)}. Discard one card.`);
@@ -293,7 +405,8 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     hostMenu(snap: GameSnap<EuchrePublic>) {
       const s = snap.pub;
       const cur = s.players.find((p) => p.id === s.turnId);
-      return cur && cur.id !== pid && !cur.bot ? `<button class="btn btn-ghost wide" data-gact='{"t":"autoplay"}'>Let a bot make ${esc(cur.name)}'s move</button>` : "";
+      const nudge = cur && cur.id !== pid && !cur.bot ? `<button class="btn btn-ghost wide" data-gact='{"t":"autoplay"}'>Let a bot make ${esc(cur.name)}'s move</button>` : "";
+      return nudge + tableSizeMenu(s.table, [1, 1.3, 1.55]);
     },
     destroy() {
       ac.abort();

@@ -31,8 +31,13 @@ export const TEAM_EMOJI = ["🦌", "🌊"] as const;
 export interface EuchreSettings extends Record<string, unknown> {
   target: number;
   stick: boolean;
+  /** "pick": everyone chooses a side before the deal. "random": partners are drawn by lot. */
+  teams: "pick" | "random";
+  /** How big the trick cards are on the TV (1 = normal). */
+  table: number;
 }
-export const EUCHRE_DEFAULTS: EuchreSettings = { target: 10, stick: true };
+export const EUCHRE_DEFAULTS: EuchreSettings = { target: 10, stick: true, teams: "pick", table: 1.3 };
+export const TABLE_SIZES = [1, 1.3, 1.55];
 
 export interface EPlayer {
   id: string;
@@ -62,8 +67,13 @@ export interface HandResult {
 }
 
 export interface EuchreState {
-  phase: "bid1" | "discard" | "bid2" | "play" | "handOver" | "gameOver";
+  /** "teams": choosing sides before the first deal (seats aren't fixed yet). */
+  phase: "teams" | "bid1" | "discard" | "bid2" | "play" | "handOver" | "gameOver";
   players: EPlayer[]; // seats 0..3; teams are seat % 2
+  /** While choosing sides: who has picked which team. */
+  picks: Record<string, 0 | 1>;
+  /** The last finished trick, so phones can look back at it. */
+  lastTrick: { trick: Play[]; winner: number } | null;
   dealer: number;
   turn: number;
   upcard: ECard | null;
@@ -97,7 +107,9 @@ export type EuchreEvent =
   | { type: "trick"; winner: string; team: 0 | 1 }
   | { type: "hand"; result: HandResult }
   | { type: "gameOver"; team: 0 | 1 }
-  | { type: "standIn"; pid: string };
+  | { type: "standIn"; pid: string }
+  | { type: "teams" }
+  | { type: "picked"; pid: string; team: 0 | 1 | null };
 
 export type EuchreAction =
   | { t: "order"; alone?: boolean }
@@ -108,7 +120,11 @@ export type EuchreAction =
   | { t: "collect" }
   | { t: "nextHand" }
   | { t: "restart" }
-  | { t: "autoplay" };
+  | { t: "autoplay" }
+  | { t: "team"; team: 0 | 1 | null; pid?: string }
+  | { t: "shuffleTeams" }
+  | { t: "deal" }
+  | { t: "table"; size: number };
 
 // ---------- card logic ----------
 
@@ -194,10 +210,13 @@ function requireTurn(s: EuchreState, pid: string): number {
 
 export function newEuchre(members: Member[], settings: EuchreSettings, hostId: string | null, rng: Rng): { state: EuchreState; events: EuchreEvent[] } {
   if (members.length !== 4) fail("Euchre needs exactly 4 players (add bots to fill seats).");
-  // Shuffle the seats so partners are random each game.
-  const seated = shuffle([...members], rng);
+  const merged = { ...EUCHRE_DEFAULTS, ...settings };
+  // Random partners: shuffle the seats. Picking: keep join order until everyone has chosen.
+  const seated = merged.teams === "random" ? shuffle([...members], rng) : [...members];
   const s: EuchreState = {
-    phase: "bid1",
+    phase: merged.teams === "random" ? "bid1" : "teams",
+    picks: {},
+    lastTrick: null,
     players: seated.map((m) => ({ id: m.id, name: m.name, hue: m.hue, avatar: m.avatar, bot: m.bot, connected: m.connected, hand: [], tricks: 0 })),
     dealer: Math.floor(rng() * 4),
     turn: 0,
@@ -215,10 +234,65 @@ export function newEuchre(members: Member[], settings: EuchreSettings, hostId: s
     hand: 0,
     lastResult: null,
     winnerTeam: null,
-    settings: { ...EUCHRE_DEFAULTS, ...settings },
+    settings: merged,
     hostId,
   };
+  if (s.phase === "teams") return { state: s, events: [{ type: "teams" }] };
   return { state: s, events: deal(s, rng) };
+}
+
+// ---------- choosing sides ----------
+
+const teamSize = (s: EuchreState, t: 0 | 1) => Object.values(s.picks).filter((x) => x === t).length;
+
+/** Pick a side (or, as the host, put someone else on one). `team: null` takes them off. */
+export function pickTeam(s: EuchreState, by: string, isHost: boolean, team: unknown, who?: unknown): EuchreEvent[] {
+  if (s.phase !== "teams") fail("Teams are already set for this game.");
+  const pid = typeof who === "string" && who ? who : by;
+  if (pid !== by && !isHost) fail("Only the host can move other players.");
+  if (!s.players.some((p) => p.id === pid)) fail("They're not at the table.");
+  const t = team === 0 || team === 1 ? team : null;
+  if (t === null) delete s.picks[pid];
+  else {
+    if (s.picks[pid] === t) return [];
+    if (teamSize(s, t) >= 2) fail(`${TEAM_NAMES[t]} is full. Someone has to switch first.`);
+    s.picks[pid] = t;
+  }
+  return [{ type: "picked", pid, team: t }];
+}
+
+/** The host deals random teams (handy with bots). */
+export function shuffleTeams(s: EuchreState, isHost: boolean, rng: Rng): EuchreEvent[] {
+  if (s.phase !== "teams") fail("Teams are already set for this game.");
+  if (!isHost) fail("Only the host can do that.");
+  const order = shuffle(s.players.map((p) => p.id), rng);
+  s.picks = Object.fromEntries(order.map((id, i) => [id, (i % 2) as 0 | 1]));
+  return [{ type: "picked", pid: "", team: null }];
+}
+
+/** Lock in the teams and deal. Anyone who hasn't picked fills the open spots. */
+export function dealTeams(s: EuchreState, isHost: boolean, rng: Rng): EuchreEvent[] {
+  if (s.phase !== "teams") fail("Teams are already set for this game.");
+  if (!isHost) fail("Only the host can start the deal.");
+  for (const p of s.players) {
+    if (s.picks[p.id] !== undefined) continue;
+    s.picks[p.id] = teamSize(s, 0) < 2 ? 0 : 1;
+  }
+  const team0 = s.players.filter((p) => s.picks[p.id] === 0);
+  const team1 = s.players.filter((p) => s.picks[p.id] === 1);
+  if (team0.length !== 2 || team1.length !== 2) fail("Each team needs exactly 2 players.");
+  // Partners sit across from each other: seats 0 & 2, and 1 & 3.
+  s.players = [team0[0]!, team1[0]!, team0[1]!, team1[1]!];
+  s.dealer = Math.floor(rng() * 4);
+  return deal(s, rng);
+}
+
+/** The host changes how big the trick cards look on the TV. */
+export function setTable(s: EuchreState, isHost: boolean, size: number): EuchreEvent[] {
+  if (!isHost) fail("Only the host can change that.");
+  if (!TABLE_SIZES.includes(size)) fail("That size isn't available.");
+  s.settings.table = size;
+  return [];
 }
 
 function deal(s: EuchreState, rng: Rng): EuchreEvent[] {
@@ -232,6 +306,7 @@ function deal(s: EuchreState, rng: Rng): EuchreEvent[] {
   s.trickDone = null;
   s.teamTricks = [0, 0];
   s.bids = [null, null, null, null];
+  s.lastTrick = null;
   for (const p of s.players) {
     p.hand = sortHand(deck.splice(0, 5), null);
     p.tricks = 0;
@@ -358,6 +433,7 @@ export function collect(s: EuchreState): EuchreEvent[] {
   if (!s.trickDone) return [];
   const w = s.trickDone.winner;
   s.trickDone = null;
+  s.lastTrick = { trick: s.trick, winner: w };
   s.trick = [];
   s.turn = w;
   if (s.teamTricks[0] + s.teamTricks[1] < 5) return [];
@@ -395,6 +471,17 @@ export function restart(s: EuchreState, isHost: boolean, rng: Rng): EuchreEvent[
   s.winnerTeam = null;
   s.hand = 0;
   s.dealer = (s.dealer + 1) % 4;
+  if (s.settings.teams === "pick") {
+    // Back to choosing sides, with the same teams ready to go.
+    s.phase = "teams";
+    s.picks = Object.fromEntries(s.players.map((p, i) => [p.id, teamOf(i)]));
+    for (const p of s.players) p.hand = [];
+    s.trump = null;
+    s.upcard = null;
+    s.trick = [];
+    s.lastTrick = null;
+    return [{ type: "teams" }];
+  }
   return deal(s, rng);
 }
 
@@ -433,6 +520,12 @@ export interface EuchrePublic {
   lastResult: HandResult | null;
   winnerTeam: 0 | 1 | null;
   hostId: string | null;
+  /** While choosing sides: who picked which team. */
+  picks: Record<string, 0 | 1>;
+  lastTrick: { pid: string; card: ECard }[];
+  lastTrickWinner: string | null;
+  table: number;
+  teamsMode: "pick" | "random";
 }
 
 export function publicView(s: EuchreState): EuchrePublic {
@@ -470,6 +563,11 @@ export function publicView(s: EuchreState): EuchrePublic {
     lastResult: s.lastResult,
     winnerTeam: s.winnerTeam,
     hostId: s.hostId,
+    picks: s.picks ?? {},
+    lastTrick: (s.lastTrick?.trick ?? []).map((t) => ({ pid: s.players[t.seat]!.id, card: t.card })),
+    lastTrickWinner: s.lastTrick ? s.players[s.lastTrick.winner]!.id : null,
+    table: s.settings.table ?? 1,
+    teamsMode: s.settings.teams ?? "random",
   };
 }
 

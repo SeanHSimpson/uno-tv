@@ -51,7 +51,7 @@ The TV plays the music; phones play small sounds for their own player (the turn 
 | Lobby & between rounds (rotates) | Chopin's *Nocturne Op. 9 No. 2*, Debussy's *Clair de Lune*, Beethoven's *Für Elise*, Satie's *Gymnopédie No. 1*, Pachelbel's *Canon in D* |
 | During play (rotates) | Joplin's *The Entertainer* and *Maple Leaf Rag*, Mozart's *Rondo alla Turca* and *Eine kleine Nachtmusik* (1st movement), Sousa's *The Stars and Stripes Forever*, Grieg's *In the Hall of the Mountain King*, Petzold/Bach's *Minuet in G*, and *Korobeiniki* (the Russian folk song that the classic falling-blocks game made famous; the whole tune is only 8 bars, so it's arranged as four verses with harmony, an octave lift and the traditional speed-up) |
 
-Every piece plays complete, start to finish, then the next one in the list comes on.
+Every piece plays complete, start to finish, then the next one in the list comes on. Big orchestral chords are thinned to the melody plus a few accompaniment notes, a limiter keeps loud passages from clipping, and the music is scheduled far enough ahead that a busy screen doesn't make it stutter.
 
 - The music **speeds up** when anyone is down to their last card.
 - Pressing **OhNo!** sets off a suspense sting on the TV: a rumble and rising tremolo, then *dun… dun… DUNNN*.
@@ -120,21 +120,26 @@ The traditional seven-contract rummy (the public-domain family that games like P
   - **Lay down:** the button lights up ✓ as soon as your selection makes the contract. You don't have to arrange the groups; the game works out the sets and runs.
   - **Add to a group:** pick a group from the cards that fit.
   - **Discard:** select one card.
-  - **Sort:** toggles between rank and suit.
-- **Host settings:** Classic (7 contracts) or Short (4: 2 sets → set + run → 2 runs → 3 runs), and "May I?" on or off.
+  - **Arrange your hand:** sort by **Rank** or **Suit**, or drag cards wherever you like (**My order**). **🂠 Fan** shows the hand fanned and overlapping like real cards; **▦ Grid** lays them out flat.
+  - **👀 Table:** everyone's groups, the discard and card counts, big enough to read on the phone.
+- **Host settings:** Classic (7 contracts) or Short (4: 2 sets → set + run → 2 runs → 3 runs), "May I?" on or off, **Lay down in parts** (off by default), and **Cards on the TV** (Normal, Big or Huge; also in ⚙︎ mid-game). If that many groups won't fit, the TV shrinks the cards until they do.
+- **Lay down in parts** (house rule): put down one piece of the contract now (say, one of your two sets) and the rest on a later turn. You can't add to other groups until your whole contract is down, and the last round (3 runs) still goes down all at once.
 - **Bots** collect toward the contract, only take discards that complete something, lay down as soon as they can, add to groups, and sometimes shout "May I?".
 
 ## Euchre
 
 The classic four-player partnership game, dressed up north: a cedar table on a night lake, a pine tree line, birch-bark cards with a **buck** on the Jacks, a **lighthouse** on the Queens and a **black bear** on the Kings, and both peninsulas on the card backs. The teams are 🦌 **Deer Camp** (blaze orange) and 🌊 **Lake Effect** (lake blue). Get euchred and you'll hear a loon.
 
-- Exactly **4 players**, partners across from each other (seats are shuffled each game). Add bots to fill empty seats.
+- Exactly **4 players**, partners across from each other. Add bots to fill empty seats.
+- **Picking partners** (the default): before the deal, everyone picks 🦌 Deer Camp or 🌊 Lake Effect on their phone. The host can move anyone (tap them), deal random teams, or just deal: anyone who hasn't picked fills an open seat. "Play again" comes back to this screen with the same teams ready. Set **Teams** to *Random* to skip it.
 - 24 cards (9 through Ace), 5 each, one card turned up.
 - **Bidding, round 1:** starting left of the dealer, order up the turned card's suit as trump (the dealer picks it up and discards) or pass. **Round 2:** name any other suit, or pass. **Stick the dealer** (on by default): the dealer can't pass in round 2. With it off, four more passes throw the hand in.
 - Whoever names trump may **go alone**: their partner sits out.
 - **Trump order:** Right bower (Jack of trump), Left bower (the other Jack of the same colour, which counts as trump), A, K, Q, 10, 9. Follow the suit led if you can; your phone only lets you play legal cards.
 - **Scoring:** the makers take 3–4 tricks for **1**, all 5 for **2** (**4** alone). Fewer than 3 and they're **euchred**: the defenders get **2**. First to **10** (or 5 for a quick game) wins.
 - Hands deal themselves after a short summary. If someone leaves mid-game, a bot keeps their seat warm. The host can also let a bot make a stuck player's move.
+- **On your phone:** sort your cards by suit (trump first) or rank, drag them into your own order, or fan them like a real hand. **👀 Table** shows the trick in progress at a readable size, the last trick and who took it, and the score.
+- **Cards on the TV:** Normal, Big (default) or Huge, in the lobby settings or ⚙︎ mid-game.
 
 ## Fizzle!
 
@@ -203,6 +208,7 @@ src/
     music/*.ts           Note lists converted from Mutopia Project MIDI files (credits inside)
     cards.ts             Original SVG card art for OhNo! (faces + backs)
     playingCards.ts      Cozy SVG playing cards (Contract Rummy)
+    handArrange.ts       Sort / drag / fan your hand (Contract Rummy, Euchre)
     net.ts               PartySocket connection, room API, player id
     ui.ts, fx.ts         Helpers: avatars, toasts, fly animation, confetti, wake lock
     styles.css           Theme
