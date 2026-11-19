@@ -72,7 +72,7 @@ describe("cards & melds", () => {
 
 /** A round in the play stage with chosen hands. */
 function table(hands: PCard[][], opts: Partial<E.RummyState> = {}) {
-  const { state } = E.newRummy(members(hands.length), { rounds: 7, mayI: true }, "p0", seeded(1));
+  const { state } = E.newRummy(members(hands.length), { rounds: 7, mayI: true, parts: false, table: 1 }, "p0", seeded(1));
   state.players.forEach((p, i) => (p.hand = hands[i]!));
   state.turn = 0;
   state.stage = "play";
@@ -84,7 +84,7 @@ function table(hands: PCard[][], opts: Partial<E.RummyState> = {}) {
 
 describe("turns", () => {
   it("deals 10 cards for the first four contracts and 12 after; contracts in order", () => {
-    const { state, events } = E.newRummy(members(3), { rounds: 7, mayI: true }, "p0", seeded(2));
+    const { state, events } = E.newRummy(members(3), { rounds: 7, mayI: true, parts: false, table: 1 }, "p0", seeded(2));
     expect(state.players.every((p) => p.hand.length === 10)).toBe(true);
     expect(events[0]).toMatchObject({ type: "deal", round: 1, contract: "2 sets of 3" });
     expect(E.handSize(4)).toBe(12);
@@ -131,6 +131,46 @@ describe("turns", () => {
     expect(() => E.layDown(s, "p0", s.players[0]!.hand.slice(0, 12).map((x) => x.id))).toThrow(/whole hand/);
     const ev = E.layDown(s, "p0", s.players[0]!.hand.map((x) => x.id));
     expect(ev.at(-1)).toMatchObject({ type: "gameOver" });
+  });
+
+  it("house rule: lay the contract down in parts", () => {
+    const hand = () => [c(9, "H"), c(9, "S"), c(9, "C"), c(5, "D"), c(5, "S"), c(5, "C"), c(3, "S"), c(12, "D")];
+    // Off (the default): one set on its own is refused.
+    const off = table([hand(), [c(3)]]);
+    expect(() => E.layDown(off, "p0", off.players[0]!.hand.slice(0, 3).map((x) => x.id))).toThrow(/don't make 2 sets of 3/);
+
+    const s = table([hand(), [c(1, "S"), c(0)]]);
+    s.settings.parts = true;
+    const ev = E.layDown(s, "p0", s.players[0]!.hand.slice(0, 3).map((x) => x.id));
+    expect(ev[0]).toMatchObject({ type: "down", partial: true });
+    expect(s.players[0]!.down).toBe(false);
+    expect(s.players[0]!.laid).toEqual({ sets: 1, runs: 0 });
+    expect(E.publicView(s).players[0]).toMatchObject({ partial: true, down: false });
+    expect(E.privateView(s, "p0")?.left).toEqual({ sets: 1, runs: 0 });
+    // Half down: no adding to groups yet, and junk is still refused.
+    expect(() => E.hit(s, "p0", [s.players[0]!.hand.find((x) => x.rank === 12)!.id], s.melds[0]!.id)).toThrow(/rest of your contract/);
+    expect(() => E.layDown(s, "p0", s.players[0]!.hand.filter((x) => x.rank !== 5).map((x) => x.id))).toThrow(/you still need \(1 set of 3\)|still need/);
+    // The second set (on a later turn, or the same one) finishes it.
+    E.layDown(s, "p0", s.players[0]!.hand.filter((x) => x.rank === 5).map((x) => x.id));
+    expect(s.players[0]!.down).toBe(true);
+    expect(s.melds).toHaveLength(2);
+    // Fully down: can't lay down again.
+    expect(() => E.layDown(s, "p0", [s.players[0]!.hand[0]!.id])).toThrow(/already down/);
+  });
+
+  it("laying down in parts never applies to the last round", () => {
+    const s = table([[1, 2, 3, 4, 5, 6, 7, 8].map((r) => c(r, "S")).concat([c(9, "D"), c(10, "D"), c(11, "D"), c(12, "D")]), [c(3)]], { round: 7 });
+    s.settings.parts = true;
+    expect(E.canLayParts(s)).toBe(false);
+    expect(() => E.layDown(s, "p0", s.players[0]!.hand.slice(0, 4).map((x) => x.id))).toThrow(/whole hand/);
+  });
+
+  it("the host can resize the TV cards any time", () => {
+    const s = table([[c(3)], [c(4)]]);
+    expect(() => E.setTable(s, false, 2)).toThrow(/host/);
+    expect(() => E.setTable(s, true, 7)).toThrow(/isn't available/);
+    E.setTable(s, true, 2);
+    expect(E.publicView(s).table).toBe(2);
   });
 
   it("May I?: the first asker in seat order gets the discard plus a penalty card", () => {
@@ -240,6 +280,9 @@ describe("selection hint", () => {
     expect(selectionHint(set, { sets: 2, runs: 0 }, opts)?.text).toMatch(/That's 1 set of 3\. You still need 1 set of 3/);
     // Not a group yet.
     expect(selectionHint([c(2, "S"), c(9, "H"), c(13, "C")], { sets: 2, runs: 0 }, opts)?.text).toMatch(/don't make a group yet/);
+    // Laying down in parts: one piece is enough.
+    expect(selectionHint(set, { sets: 2, runs: 0 }, { ...opts, parts: true })).toEqual({ ok: true, text: expect.stringMatching(/Lay it down now; you'll still need 1 set of 3/) });
+    expect(selectionHint(set, { sets: 1, runs: 0 }, { ...opts, parts: true, started: true })?.text).toMatch(/rest of your contract/);
     // Nothing selected: no hint.
     expect(selectionHint([], { sets: 2, runs: 0 }, opts)).toBeNull();
     // Last round needs the whole hand.

@@ -52,11 +52,18 @@ class AudioEngine {
   private build() {
     const ctx = this.ctx!;
     this.master = ctx.createGain();
-    this.master.gain.value = 0.9;
+    this.master.gain.value = 0.8;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14;
     comp.ratio.value = 4;
-    this.master.connect(comp).connect(ctx.destination);
+    // A brick-wall limiter last, so loud chords squash instead of clipping (that's the crackle).
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.002;
+    limiter.release.value = 0.12;
+    this.master.connect(comp).connect(limiter).connect(ctx.destination);
 
     // A little warm room echo on everything.
     const delay = ctx.createDelay(1);
@@ -109,7 +116,7 @@ class AudioEngine {
     this.cursor = 0;
     this.cursorBeat = 0;
     this.cursorTime = now + 0.15;
-    this.timer = window.setInterval(() => this.schedule(), 40);
+    this.timer = window.setInterval(() => this.schedule(), 50);
   }
 
   private level() {
@@ -137,8 +144,9 @@ class AudioEngine {
     const ctx = this.ctx!;
     const song = this.playlist[this.songIdx]!;
     const spb = 60 / (song.bpm * (song.mode === "game" ? this.tempo : 1));
-    const horizon = ctx.currentTime + 0.25;
-    for (let guard = 0; guard < 200; guard++) {
+    // Schedule well ahead: if the page is busy redrawing, the music keeps going.
+    const horizon = ctx.currentTime + 0.6;
+    for (let guard = 0; guard < 400; guard++) {
       const ev = this.compiled.events[this.cursor];
       if (!ev) {
         // End of the loop: move on to the next tune every two plays.
@@ -154,7 +162,7 @@ class AudioEngine {
         return;
       }
       let t = this.cursorTime + (ev.beat - this.cursorBeat) * spb;
-      if (t < ctx.currentTime - 0.3) {
+      if (t < ctx.currentTime - 0.15) {
         // We fell behind (the tab was asleep): pick up from this note instead of
         // blasting every missed one. (Only when a note is actually late; rests are fine.)
         this.cursorTime = ctx.currentTime + 0.05;
@@ -169,7 +177,14 @@ class AudioEngine {
     }
   }
 
+  /** When each sounding music note ends, so very busy passages can't pile up hundreds of voices. */
+  private voiceEnds: number[] = [];
+  private static MAX_VOICES = 28;
+
   private playEvent(ev: MusicEvent, t: number, dur: number) {
+    this.voiceEnds = this.voiceEnds.filter((e) => e > t);
+    // The tune always plays; accompaniment gives way when too much is already ringing.
+    if (ev.voice !== "lead" && this.voiceEnds.length >= AudioEngine.MAX_VOICES) return;
     // Keep the score's dynamics (soft passages stay soft) without letting quiet notes vanish.
     const dyn = 0.6 + 0.4 * ev.vel;
     // A music box can't sound very low notes, so lift anything too deep up by octaves.
@@ -177,10 +192,15 @@ class AudioEngine {
       while (m < floor) m += 12;
       return m;
     };
-    if (ev.voice === "lead") this.musicBox(hz(lift(ev.midi, 57)), t, Math.min(4, Math.max(0.35, dur * 1.6)), 0.22 * dyn, this.musicBus);
-    else if (ev.voice === "harmony") this.musicBox(hz(lift(ev.midi, 50)), t, Math.min(3, Math.max(0.3, dur * 1.4)), 0.1 * dyn, this.musicBus);
-    else if (ev.voice === "bass") this.bass(hz(lift(ev.midi, 36)), t, Math.min(3, Math.max(0.2, dur)), this.musicBus, dyn);
-    else this.noiseHit(t, 0.05, 7000, 0.025, "highpass", this.musicBus);
+    let len: number;
+    if (ev.voice === "lead") this.musicBox(hz(lift(ev.midi, 57)), t, (len = Math.min(4, Math.max(0.35, dur * 1.6))), 0.22 * dyn, this.musicBus);
+    else if (ev.voice === "harmony") this.musicBox(hz(lift(ev.midi, 50)), t, (len = Math.min(2.5, Math.max(0.3, dur * 1.4))), 0.1 * dyn, this.musicBus, true);
+    else if (ev.voice === "bass") this.bass(hz(lift(ev.midi, 36)), t, (len = Math.min(3, Math.max(0.2, dur))), this.musicBus, dyn);
+    else {
+      this.noiseHit(t, 0.05, 7000, 0.025, "highpass", this.musicBus);
+      return;
+    }
+    this.voiceEnds.push(t + len);
   }
 
   // ---------- instruments ----------
@@ -206,11 +226,12 @@ class AudioEngine {
   }
 
   /** Plucked music-box / celesta tone. */
-  private musicBox(f: number, t: number, len: number, vol: number, dest: AudioNode) {
+  private musicBox(f: number, t: number, len: number, vol: number, dest: AudioNode, light = false) {
     const g = this.env(t, vol, 0.004, len, dest);
     this.osc("sine", f, t, len, g);
     const h = this.env(t, vol * 0.35, 0.003, len * 0.4, dest);
     this.osc("sine", f * 2, t, len * 0.4, h);
+    if (light) return; // accompaniment: skip the third partial (fewer voices, same sound in a chord)
     const k = this.env(t, vol * 0.12, 0.002, len * 0.15, dest);
     this.osc("triangle", f * 3, t, len * 0.15, k);
   }

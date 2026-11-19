@@ -20,6 +20,15 @@ export const rummy: GameModule<E.RummyState, E.RummySettings, E.RummyAction, E.R
   settings: [
     { key: "rounds", label: "Game length", options: [{ value: 7, label: "Classic (7 contracts)" }, { value: 4, label: "Short (4)" }] },
     { key: "mayI", label: "\"May I?\" (buy the discard)", options: [{ value: true, label: "On" }, { value: false, label: "Off" }] },
+    {
+      key: "parts",
+      label: "Lay down in parts",
+      options: [
+        { value: false, label: "Off (all at once)" },
+        { value: true, label: "On (a set now, the rest later)" },
+      ],
+    },
+    { key: "table", label: "Cards on the TV", options: [{ value: 1, label: "Normal" }, { value: 1.5, label: "Big" }, { value: 2, label: "Huge" }] },
   ],
   defaultSettings: { ...E.RUMMY_DEFAULTS },
 
@@ -44,6 +53,8 @@ export const rummy: GameModule<E.RummyState, E.RummySettings, E.RummyAction, E.R
         return E.nextRound(s, ctx.isHost, ctx.rng);
       case "skip":
         return E.skipTurn(s, pid, ctx.isHost);
+      case "table":
+        return E.setTable(s, ctx.isHost, Number(a.size));
       default:
         return [];
     }

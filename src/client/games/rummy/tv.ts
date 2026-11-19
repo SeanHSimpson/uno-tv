@@ -53,6 +53,7 @@ export function rummyTv(ctx: TvCtx): GameView {
             ${avatar(p, "sm")}
             <div class="rm-who"><div class="rm-name"><b>${esc(p.name)}</b>${p.bot ? ' <span class="bot-tag">bot</span>' : ""}${p.id === s.hostId ? ' <i class="crown">♛</i>' : ""}</div>
               <small>${p.count} card${p.count === 1 ? "" : "s"} · ${p.score} pts${p.buys ? ` · ${p.buys} May I` : ""}</small></div>
+            ${p.partial ? `<span class="rm-part">Part down</span>` : ""}
             ${p.down ? `<span class="rm-down">✓ Down</span>` : `<span class="rm-fan">${Array.from({ length: fan }, () => "<i></i>").join("")}</span>`}
           </div>
           <div class="rm-melds">${
@@ -63,12 +64,25 @@ export function rummyTv(ctx: TvCtx): GameView {
         </div>`;
       })
       .join("");
+    fitBoards(s.table);
 
     if (s.phase === "playing" && s.turnId) {
       const p = s.players.find((x) => x.id === s.turnId)!;
       $("#rm-turn").innerHTML = `${avatar(p, "sm")} <b>${esc(p.name)}</b> ${s.stage === "draw" ? "is drawing" : "is playing"}${p.connected ? "" : ` <span class="tag-off">(phone disconnected)</span>`}`;
     } else if (s.roundWinner) $("#rm-turn").innerHTML = `<b>${names(s.roundWinner)}</b> went out!`;
     renderResults(s);
+  }
+
+  /** The host picks the card size; if that many groups won't fit, shrink until they do. */
+  function fitBoards(want: number) {
+    const root = ctx.el.querySelector<HTMLElement>(".rummy-tv")!;
+    const boards = $("#rm-boards");
+    let ts = want || 1;
+    root.style.setProperty("--ts", String(ts));
+    while (ts > 0.7 && boards.scrollHeight > boards.clientHeight + 2) {
+      ts = Math.round((ts - 0.1) * 100) / 100;
+      root.style.setProperty("--ts", String(ts));
+    }
   }
 
   function renderResults(s: RummyPublic) {
@@ -147,8 +161,8 @@ export function rummyTv(ctx: TvCtx): GameView {
           break;
         case "down":
           audio.cardPlay("wild");
-          bubble(e.pid, "Down! ✓", "good");
-          log.push(`${names(e.pid)} laid down their contract`);
+          bubble(e.pid, e.partial ? "Part down!" : "Down! ✓", "good");
+          log.push(e.partial ? `${names(e.pid)} laid down part of their contract` : `${names(e.pid)} laid down their contract`);
           if (!reducedMotion())
             for (const id of e.melds) document.querySelector(`[data-meld="${id}"]`)?.animate([{ transform: "scale(1.15)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 500 });
           break;

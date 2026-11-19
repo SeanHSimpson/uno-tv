@@ -1,12 +1,14 @@
 // Contract Rummy on a phone: draw, pick cards, lay down, add to groups, discard.
 
-import { canAdd, findContract, type PCard } from "../../../shared/games/rummy/cards";
+import { canAdd, contractLabel, findContract, partOfContract, type PCard } from "../../../shared/games/rummy/cards";
 import type { RummyEvent, RummyPrivate, RummyPublic } from "../../../shared/games/rummy/engine";
 import { selectionHint } from "../../../shared/games/rummy/hint";
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
+import { attachReorder, fitHand, HandArranger } from "../../handArrange";
 import { pcardEl, pcardHtml, shortCard } from "../../playingCards";
 import { $, avatar, esc, toast } from "../../ui";
+import { tableSizeMenu } from "../tableSize";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
 
 export function rummyPhone(ctx: PhoneCtx): GameView {
@@ -16,8 +18,13 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   let me: RummyPrivate | null = null;
   let isHost = false;
   let selected = new Set<number>();
-  let sortBy: "rank" | "suit" = "rank";
   let wasMyTurn = false;
+  const rankOf = (c: PCard) => c.rank || 99;
+  const suitOf = (c: PCard) => c.suit ?? "z";
+  const arranger = new HandArranger<PCard>("rummy", {
+    rank: (a, b) => rankOf(a) - rankOf(b) || suitOf(a).localeCompare(suitOf(b)) || a.id - b.id,
+    suit: (a, b) => suitOf(a).localeCompare(suitOf(b)) || rankOf(a) - rankOf(b) || a.id - b.id,
+  });
 
   ctx.el.innerHTML = `
   <div class="rummy-phone">
@@ -27,15 +34,16 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       <button class="btn btn-ghost" id="rm-draw-discard"></button>
     </section>
     <section class="rm-mayibar" id="rm-mayibar" hidden><button class="btn btn-ghost wide" id="rm-mayi"></button></section>
+    <section class="hand-toolbar" id="rm-tools"></section>
     <main class="hand rm-hand" id="rm-hand" aria-label="Your hand"></main>
     <p class="rm-hint" id="rm-hint" hidden></p>
     <footer class="rm-actions" id="rm-actions">
-      <button class="btn btn-ghost rm-sort" id="rm-sort">Sort: rank</button>
       <button class="btn btn-primary" id="rm-lay" hidden></button>
       <button class="btn btn-ghost" id="rm-hit" hidden></button>
       <button class="btn btn-danger" id="rm-discard" hidden>Discard</button>
     </footer>
     <section class="sheet" id="rm-hit-sheet" hidden></section>
+    <section class="sheet glance-sheet" id="rm-glance" hidden></section>
     <section class="ph-results overlay" id="rm-results" hidden></section>
   </div>`;
 
@@ -50,9 +58,27 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     send({ t: "mayI" });
     haptic("select");
   });
-  $("#rm-sort").addEventListener("click", () => {
-    sortBy = sortBy === "rank" ? "suit" : "rank";
+  $("#rm-tools").addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const sort = t.closest<HTMLElement>("[data-sort]");
+    if (sort) arranger.setMode(sort.dataset.sort as "rank" | "suit" | "free");
+    else if (t.closest("[data-layout]")) arranger.toggleLayout();
+    else if (t.closest("[data-glance]")) {
+      renderGlance();
+      ctx.openSheet($("#rm-glance"));
+      return;
+    } else return;
+    haptic("select");
     render();
+  });
+  const reorder = attachReorder(hand, {
+    signal: ac.signal,
+    onMove: () => fitHand(hand, arranger.layout, 120),
+    onDrop: (ids) => {
+      arranger.setOrder(ids);
+      haptic("select");
+      render();
+    },
   });
   hand.addEventListener("click", (e) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>(".pcard");
@@ -116,6 +142,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     wasMyTurn = !!me?.myTurn;
     if (!snap.first) react(snap.events as RummyEvent[]);
     render();
+    if ($("#rm-glance").classList.contains("open")) renderGlance();
   }
 
   function render() {
@@ -132,11 +159,17 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
         ? `<b>Your turn.</b> Add cards to groups, then pick one card to discard.`
         : s.finalRound
           ? `<b>Your turn.</b> To go out, select your whole hand and lay down 3 runs. Otherwise discard one card.`
-          : `<b>Your turn.</b> Select cards for your contract to lay down, or pick one card to discard.`;
+          : partDown(m)
+            ? `<b>Your turn.</b> Lay down the rest of your contract (${esc(contractLabel(m.left))}), or pick one card to discard.`
+            : s.parts
+              ? `<b>Your turn.</b> Select a set or run from your contract to lay down (one at a time is fine), or pick one card to discard.`
+              : `<b>Your turn.</b> Select cards for your contract to lay down, or pick one card to discard.`;
     else msg = turnP ? `${avatar(turnP, "xs")} <b>${esc(turnP.name)}</b>'s turn` : "";
     $("#rm-status").innerHTML = `
       <div class="rm-status-text">
-        <div class="rm-chip"><small>Round ${s.round}/${s.rounds}</small><b>${esc(s.contractText)}</b>${m.down ? `<span class="rm-down">✓ You're down</span>` : ""}</div>
+        <div class="rm-chip"><small>Round ${s.round}/${s.rounds}</small><b>${esc(s.contractText)}</b>${
+          m.down ? `<span class="rm-down">✓ You're down</span>` : partDown(m) ? `<span class="rm-part">Still need ${esc(contractLabel(m.left))}</span>` : ""
+        }</div>
         <div class="rm-msg">${msg}</div>
       </div>
       <div class="rm-ph-discard" aria-label="Top of the discard pile">
@@ -159,21 +192,23 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     const hit = $("#rm-hit") as HTMLButtonElement;
     const dis = $("#rm-discard") as HTMLButtonElement;
     const playing = m.canPlay;
-    const contractOk = !m.down && cards.length > 0 && !!findContract(cards, s.contract, true) && (!s.finalRound || cards.length === m.hand.length);
+    const whole = cards.length > 0 && !!findContract(cards, m.left, true) && (!s.finalRound || cards.length === m.hand.length);
+    const part = !whole && s.parts && cards.length > 0 ? partOfContract(cards, m.left) : null;
+    const contractOk = !m.down && (whole || !!part);
     lay.hidden = !playing || m.down || cards.length < 3;
     lay.disabled = !contractOk;
-    lay.textContent = contractOk ? `Lay down ✓` : `Lay down (${cards.length} selected)`;
+    lay.textContent = whole ? `Lay down ✓` : part ? `Lay down ${contractLabel(part.used)} ✓` : `Lay down (${cards.length} selected)`;
     lay.classList.toggle("ready", contractOk);
     const fits = playing && m.down && !s.finalRound ? fittingMelds() : [];
     hit.hidden = !fits.length;
     hit.textContent = fits.length === 1 ? "Add to group" : `Add to a group (${fits.length})`;
     dis.hidden = !playing || cards.length !== 1;
     dis.disabled = cards.length === 1 && cards[0]!.id === m.tookFromDiscard && m.hand.length > 1;
-    $("#rm-sort").textContent = `Sort: ${sortBy}`;
 
     // Say what the selection makes, so a greyed-out "Lay down" is never a mystery.
     const hintEl = $("#rm-hint");
-    const hint = !m.down && s.phase === "playing" ? selectionHint(cards, s.contract, { final: s.finalRound, handSize: m.hand.length }) : null;
+    const started = m.left.sets + m.left.runs < s.contract.sets + s.contract.runs;
+    const hint = !m.down && s.phase === "playing" ? selectionHint(cards, m.left, { final: s.finalRound, handSize: m.hand.length, parts: s.parts, started }) : null;
     hintEl.hidden = !hint;
     if (hint) {
       hintEl.textContent = hint.text;
@@ -185,19 +220,17 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   }
 
 
-  function sorted(cards: PCard[]) {
-    const rankOf = (c: PCard) => c.rank || 99;
-    return [...cards].sort((a, b) =>
-      sortBy === "rank"
-        ? rankOf(a) - rankOf(b) || (a.suit ?? "z").localeCompare(b.suit ?? "z")
-        : (a.suit ?? "z").localeCompare(b.suit ?? "z") || rankOf(a) - rankOf(b),
-    );
-  }
+  const partDown = (m: RummyPrivate) => !m.down && m.left.sets + m.left.runs < (state?.contract.sets ?? 0) + (state?.contract.runs ?? 0);
 
   function renderHand() {
     const m = me!;
+    $("#rm-tools").innerHTML = arranger.toolbar({ glance: "👀 Table" });
+    // Don't yank the cards out from under a finger that's dragging one.
+    if (reorder.dragging()) {
+      return;
+    }
     hand.replaceChildren(
-      ...sorted(m.hand).map((c) => {
+      ...arranger.arrange(m.hand).map((c) => {
         const el = pcardEl(c, "hand-card");
         el.classList.toggle("selected", selected.has(c.id));
         el.classList.toggle("just-drew", c.id === m.tookFromDiscard);
@@ -211,22 +244,36 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
 
   /** Same idea as OhNo!: size cards so the whole hand fits without scrolling. */
   function layoutHand() {
-    if (!me) return;
-    const n = Math.max(1, me.hand.length);
-    // Measure the space inside the padding (selected cards also lift a little).
-    const cs = getComputedStyle(hand);
-    const W = hand.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8;
-    const H = hand.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 14;
-    const gap = n > 12 ? 4 : 6;
-    let best = { w: 0, cols: 1 };
-    for (let cols = 1; cols <= n; cols++) {
-      const rows = Math.ceil(n / cols);
-      const w = Math.min((W - gap * (cols - 1)) / cols, (H - gap * (rows - 1)) / rows / 1.5);
-      if (w > best.w) best = { w, cols };
-    }
-    hand.style.setProperty("--cw", `${Math.floor(Math.min(best.w, 120))}px`);
-    hand.style.setProperty("--cols", String(best.cols));
-    hand.style.setProperty("--gap", `${gap}px`);
+    if (!me || reorder.dragging()) return;
+    fitHand(hand, arranger.layout, 120);
+  }
+
+  /** A look at the whole table from the phone: everyone's groups, big enough to read. */
+  function renderGlance() {
+    const s = state;
+    if (!s) return;
+    $("#rm-glance").innerHTML = `
+      <h3>The table</h3>
+      <div class="glance-top">
+        <span><small>Round ${s.round}/${s.rounds}</small> <b>${esc(s.contractText)}</b></span>
+        <span class="glance-discard">${s.discardTop ? pcardHtml(s.discardTop, "glance-card") : ""}<small>Discard<br>${s.stockCount} in deck</small></span>
+      </div>
+      <div class="glance-players">${s.players
+        .map((p) => {
+          const melds = s.melds.filter((x) => x.owner === p.id);
+          return `<div class="glance-player ${p.id === s.turnId ? "turn" : ""}">
+            <div class="glance-who">${avatar(p, "xs")}<b>${p.id === pid ? "You" : esc(p.name)}</b>
+              <small>${p.count} card${p.count === 1 ? "" : "s"} · ${p.score} pts</small>
+              ${p.down ? `<span class="rm-down">✓ Down</span>` : p.partial ? `<span class="rm-part">Part down</span>` : ""}</div>
+            <div class="glance-melds">${
+              melds.length
+                ? melds.map((x) => `<div class="glance-meld"><span class="rm-kind">${x.kind}</span>${x.cards.map((c) => pcardHtml(c, "glance-card")).join("")}</div>`).join("")
+                : `<span class="muted">Nothing down yet</span>`
+            }</div>
+          </div>`;
+        })
+        .join("")}</div>
+      <button class="btn btn-ghost wide" data-close>Back to my hand</button>`;
   }
 
   function renderResults() {
@@ -266,7 +313,8 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       if (e.type === "discard" && e.pid === pid) audio.cardPlay("normal");
       if (e.type === "down" && e.pid === pid) {
         audio.cardPlay("wild");
-        toast("You're down! Now add cards to any group to get rid of them.");
+        if (e.partial && me) toast(`Part of your contract is down. Lay down the rest (${contractLabel(me.left)}) now or on a later turn.`);
+        else toast("You're down! Now add cards to any group to get rid of them.");
       }
       if (e.type === "hit" && e.pid === pid) audio.cardPlay("normal");
       if (e.type === "bought" && e.pid === pid) {
@@ -274,7 +322,10 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
         toast(`You got the ${shortCard(e.card)} (+1 card from the deck).`);
       }
       if (e.type === "out" && e.pid === pid) audio.fanfare();
-      if (e.type === "deal") selected.clear();
+      if (e.type === "deal") {
+        selected.clear();
+        arranger.reset();
+      }
     }
   }
 
@@ -283,7 +334,8 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     hostMenu(snap: GameSnap<RummyPublic>) {
       const s = snap.pub;
       const cur = s.players.find((p) => p.id === s.turnId);
-      return s.phase === "playing" && cur && cur.id !== pid ? `<button class="btn btn-ghost wide" data-gact='{"t":"skip"}'>Skip ${esc(cur.name)}'s turn</button>` : "";
+      const skip = s.phase === "playing" && cur && cur.id !== pid ? `<button class="btn btn-ghost wide" data-gact='{"t":"skip"}'>Skip ${esc(cur.name)}'s turn</button>` : "";
+      return skip + tableSizeMenu(s.table, [1, 1.5, 2]);
     },
     destroy() {
       ac.abort();

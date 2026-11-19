@@ -1,21 +1,36 @@
 // Explain what the selected cards make, compared with this round's contract,
 // so the phone can say why "Lay down" is (or isn't) ready.
 
-import { asRun, asSet, contractLabel, findContract, type Contract, type PCard } from "./cards";
+import { asRun, asSet, contractLabel, findContract, partOfContract, type Contract, type PCard } from "./cards";
 
 export interface SelectionHint {
   ok: boolean;
   text: string;
 }
 
-export function selectionHint(selected: PCard[], contract: Contract, opts: { final: boolean; handSize: number }): SelectionHint | null {
+/**
+ * `contract` is what's still left to lay down (the whole contract unless they've laid part of it).
+ * `parts`: the "lay down in parts" house rule is on, so a piece of the contract is enough.
+ */
+export function selectionHint(
+  selected: PCard[],
+  contract: Contract,
+  opts: { final: boolean; handSize: number; parts?: boolean; started?: boolean },
+): SelectionHint | null {
   if (!selected.length) return null;
   const need = contractLabel(contract);
 
   // The whole contract?
   if (findContract(selected, contract, true)) {
     if (opts.final && selected.length < opts.handSize) return { ok: false, text: `✓ That makes ${need}, but in the last round you must lay down your whole hand at once.` };
-    return { ok: true, text: `✓ That's the contract: ${need}. Tap Lay down!` };
+    return { ok: true, text: opts.started ? `✓ That's the rest of your contract: ${need}. Tap Lay down!` : `✓ That's the contract: ${need}. Tap Lay down!` };
+  }
+  if (opts.parts) {
+    const part = partOfContract(selected, contract);
+    if (part) {
+      const missing = { sets: contract.sets - part.used.sets, runs: contract.runs - part.used.runs };
+      return { ok: true, text: `✓ That's ${contractLabel(part.used)}. Lay it down now; you'll still need ${contractLabel(missing)}.` };
+    }
   }
 
   // Part of it? Find the biggest piece of the contract these cards make (using every card).

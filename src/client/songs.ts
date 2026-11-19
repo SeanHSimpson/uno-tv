@@ -40,13 +40,31 @@ export interface Song {
 
 type Score = { bpm: number; unitsPerBeat: number; length: number; notes: number[] };
 const VOICES: Voice[] = ["lead", "harmony", "bass"];
+const MAX_HARMONY = 3;
+const MAX_BASS = 2;
 
 /** Turn a converted score into events, optionally replaying [from, to) beat sections (for repeats). */
 function fromScore(score: Score, sections?: [number, number][], gain = 1) {
   const all: MusicEvent[] = [];
   const u = score.unitsPerBeat;
-  for (let i = 0; i < score.notes.length; i += 5) {
-    const [start, dur, midi, voice, vel] = score.notes.slice(i, i + 5) as [number, number, number, number, number];
+  // Orchestral scores double lines in unison and stack big chords. On a music box that's just
+  // louder (and too many voices at once crackles), so drop exact doubles and keep chords to
+  // the melody plus a few accompaniment notes.
+  const seen = new Set<string>();
+  const perOnset = new Map<string, number>();
+  const notes: [number, number, number, number, number][] = [];
+  for (let i = 0; i < score.notes.length; i += 5) notes.push(score.notes.slice(i, i + 5) as [number, number, number, number, number]);
+  notes.sort((a, b) => a[0] - b[0] || a[3] - b[3] || b[2] - a[2]); // lead first, then higher notes
+  for (const [start, dur, midi, voice, vel] of notes) {
+    const key = `${start}|${midi}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (voice > 0) {
+      const slot = `${start}|${voice}`;
+      const n = perOnset.get(slot) ?? 0;
+      if (n >= (voice === 1 ? MAX_HARMONY : MAX_BASS)) continue;
+      perOnset.set(slot, n + 1);
+    }
     all.push({ beat: start / u, dur: dur / u, midi, voice: VOICES[voice]!, vel: Math.min(1, (vel / 127) * gain) });
   }
   const parts = sections ?? [[0, score.length / u]];
