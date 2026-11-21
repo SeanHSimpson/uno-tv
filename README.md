@@ -120,7 +120,7 @@ The traditional seven-contract rummy (the public-domain family that games like P
   - **Lay down:** the button lights up ✓ as soon as your selection makes the contract. You don't have to arrange the groups; the game works out the sets and runs.
   - **Add to a group:** pick a group from the cards that fit.
   - **Discard:** select one card.
-  - **Arrange your hand:** sort by **Rank** or **Suit**, or **Rows**: one row per suit (clubs, diamonds, spades, hearts) running ace to king, with each rank in its own column so matching cards line up top to bottom (cards overlap a little when the hand is big). Or drag cards wherever you like (**Free**). **🂠 Fan** shows the hand fanned and overlapping like real cards; **▦ Grid** lays them out flat.
+  - **Arrange your hand:** **Rank** piles up matching cards (A A A, each one peeking out from under the next); tap Rank again for **columns** that cascade down like solitaire. **Suit** stacks each suit in a row, ace to king; tap Suit again for stacked **columns**. Your phone remembers which you like. Or **Rows**: one row per suit (clubs, diamonds, spades, hearts) running ace to king, with each rank in its own column so matching cards line up top to bottom (cards overlap a little when the hand is big). Or drag cards wherever you like (**Free**). In Free, **🂠 Fan** shows the hand fanned and overlapping like real cards; **▦ Grid** lays them out flat.
   - **👀 Table:** everyone's groups, the discard and card counts, big enough to read on the phone.
 - **Host settings:** Classic (7 contracts) or Short (4: 2 sets → set + run → 2 runs → 3 runs), "May I?" on or off, **Lay down in parts** (off by default), and **Cards on the TV** (Normal, Big or Huge; also in ⚙︎ mid-game). If that many groups won't fit, the TV shrinks the cards until they do.
 - **Lay down in parts** (house rule): put down one piece of the contract now (say, one of your two sets) and the rest on a later turn. You can't add to other groups until your whole contract is down. This works in every round, the last one included.
@@ -138,7 +138,7 @@ The classic four-player partnership game, dressed up north: a cedar table on a n
 - **Trump order:** Right bower (Jack of trump), Left bower (the other Jack of the same colour, which counts as trump), A, K, Q, 10, 9. Follow the suit led if you can; your phone only lets you play legal cards.
 - **Scoring:** the makers take 3–4 tricks for **1**, all 5 for **2** (**4** alone). Fewer than 3 and they're **euchred**: the defenders get **2**. First to **10** (or 5 for a quick game) wins.
 - Hands deal themselves after a short summary. If someone leaves mid-game, a bot keeps their seat warm. The host can also let a bot make a stuck player's move.
-- **On your phone:** sort your cards by suit (trump first) or rank, drag them into your own order, or fan them like a real hand. **👀 Table** shows the trick in progress at a readable size, the last trick and who took it, and the score.
+- **On your phone:** **Suit** stacks your cards by suit (trump first), **Rank** piles them by rank (aces first); tap either again to switch between rows/piles and columns. Or drag them into your own order (**Free**) and fan them like a real hand. **👀 Table** shows the trick in progress at a readable size, the last trick and who took it, and the score.
 - **Cards on the TV:** Normal, Big (default) or Huge, in the lobby settings or ⚙︎ mid-game.
 
 ## Fizzle!

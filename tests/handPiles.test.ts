@@ -39,6 +39,15 @@ describe("layoutPiles", () => {
     });
   }
 
+  for (const style of ["piles", "cascade", "rows"] as PileStyle[]) {
+    it(`${style}: a very short hand area (Euchre bidding on a small phone) still fits`, () => {
+      const box = { W: 328, H: 50 };
+      const spots = layoutPiles([[1], [2, 3], [4], [5]], style, box, 130);
+      expect(spots.size).toBe(5);
+      inside(spots, box);
+    });
+  }
+
   it("piles are big enough to read and spread copies to the right", () => {
     const spots = layoutPiles(RANK_GROUPS, "piles", BOX, 104);
     expect(spots.get(1)!.w).toBeGreaterThanOrEqual(60);

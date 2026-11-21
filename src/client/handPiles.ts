@@ -20,15 +20,28 @@ const MIN_ROW_STEP = 0.42;
 
 export function layoutPiles(groups: number[][], style: PileStyle, box: { W: number; H: number }, maxCw: number): Map<number, Spot> {
   const gs = groups.filter((g) => g.length);
-  for (let w = Math.floor(maxCw); w >= MIN_W; w--) {
-    const spots = style === "rows" ? stackedRows(gs, w, box) : flow(gs, SPREAD[style], w, box);
-    if (spots) return spots;
-  }
-  return style === "rows" ? stackedRows(gs, MIN_W, box, true)! : flow(gs, SPREAD[style], MIN_W, box, true)!;
+  // Too cramped for this style (a short hand area)? Plain piles, then one overlapping strip.
+  const tries: PileStyle[] = style === "piles" ? ["piles"] : [style, "piles"];
+  for (const st of tries)
+    for (let w = Math.floor(maxCw); w >= MIN_W; w--) {
+      const spots = st === "rows" ? stackedRows(gs, w, box) : flow(gs, SPREAD[st], w, box);
+      if (spots) return spots;
+    }
+  return strip(gs.flat(), box, maxCw);
+}
+
+/** Last resort: every card in one row, overlapping, as big as the box allows. */
+function strip(ids: number[], box: { W: number; H: number }, maxCw: number) {
+  const n = Math.max(1, ids.length);
+  const w = Math.max(1, Math.min(maxCw, box.H / 1.5, box.W / (1 + ROW_DX * (n - 1))));
+  const step = n > 1 ? Math.min(w + GAP, (box.W - w) / (n - 1)) : 0;
+  const x0 = Math.max(0, (box.W - (w + step * (n - 1))) / 2);
+  const y0 = Math.max(0, (box.H - w * 1.5) / 2);
+  return new Map(ids.map((id, i) => [id, { x: x0 + step * i, y: y0, w }]));
 }
 
 /** Piles left to right, wrapping into rows; each row centred, the whole block centred. */
-function flow(groups: number[][], { dx, dy }: { dx: number; dy: number }, w: number, box: { W: number; H: number }, force = false) {
+function flow(groups: number[][], { dx, dy }: { dx: number; dy: number }, w: number, box: { W: number; H: number }) {
   const h = w * 1.5;
   type Row = { piles: { ids: number[]; pw: number }[]; width: number; height: number };
   const rows: Row[] = [];
@@ -47,7 +60,7 @@ function flow(groups: number[][], { dx, dy }: { dx: number; dy: number }, w: num
   rows.push(row);
   const total = rows.reduce((s, r) => s + r.height, 0) + GAP * (rows.length - 1);
   const widest = Math.max(...rows.map((r) => r.width));
-  if (!force && (total > box.H || widest > box.W)) return null;
+  if (total > box.H || widest > box.W) return null;
   const out = new Map<number, Spot>();
   let y = Math.max(0, (box.H - total) / 2);
   for (const r of rows) {
@@ -62,12 +75,12 @@ function flow(groups: number[][], { dx, dy }: { dx: number; dy: number }, w: num
 }
 
 /** One row per group, left-aligned as a block that's centred in the box. */
-function stackedRows(groups: number[][], w: number, box: { W: number; H: number }, force = false) {
+function stackedRows(groups: number[][], w: number, box: { W: number; H: number }) {
   const h = w * 1.5;
   const R = groups.length;
   const step = R > 1 ? Math.min(h + GAP, (box.H - h) / (R - 1)) : 0;
   const widest = Math.max(0, ...groups.map((g) => w + ROW_DX * w * (g.length - 1)));
-  if (!force && ((R > 1 && step < MIN_ROW_STEP * h) || widest > box.W || h > box.H)) return null;
+  if ((R > 1 && step < MIN_ROW_STEP * h) || widest > box.W || h > box.H) return null;
   const x0 = Math.max(0, (box.W - widest) / 2);
   const y0 = Math.max(0, (box.H - (h + step * (R - 1))) / 2);
   const out = new Map<number, Spot>();

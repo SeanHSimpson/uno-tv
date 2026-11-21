@@ -4349,3 +4349,19 @@ body.theme-mi .ph-results {
   justify-self: start;
   align-self: start;
 }
+
+/* Grouped by rank or suit: piles, cascades and stacked rows, every card placed by fitHand. */
+.hand.placed {
+  display: block;
+  position: relative;
+}
+.hand.placed > .pcard {
+  position: absolute;
+}
+.hand-tools .seg button small {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  opacity: 0.75;
+  line-height: 1.1;
+}

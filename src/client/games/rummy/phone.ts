@@ -20,16 +20,19 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   let selected = new Set<number>();
   let wasMyTurn = false;
   const rankOf = (c: PCard) => c.rank || 99;
-  const suitOf = (c: PCard) => c.suit ?? "z";
-  // Rows: clubs, diamonds, spades, hearts top to bottom (colors alternate), ace to king across.
+  // Suit order everywhere: clubs, diamonds, spades, hearts (colors alternate); jokers last.
   const ROW_SUITS = ["C", "D", "S", "H"];
+  const suitIdx = (c: PCard) => (c.suit ? ROW_SUITS.indexOf(c.suit) : 9);
   const arranger = new HandArranger<PCard>(
     "rummy",
     {
-      rank: (a, b) => rankOf(a) - rankOf(b) || suitOf(a).localeCompare(suitOf(b)) || a.id - b.id,
-      suit: (a, b) => suitOf(a).localeCompare(suitOf(b)) || rankOf(a) - rankOf(b) || a.id - b.id,
+      rank: (a, b) => rankOf(a) - rankOf(b) || suitIdx(a) - suitIdx(b) || a.id - b.id,
+      suit: (a, b) => suitIdx(a) - suitIdx(b) || rankOf(a) - rankOf(b) || a.id - b.id,
     },
-    { rowsOf: (c) => (c.suit ? { row: ROW_SUITS.indexOf(c.suit), col: c.rank } : null) },
+    {
+      rowsOf: (c) => (c.suit ? { row: ROW_SUITS.indexOf(c.suit), col: c.rank } : null),
+      groups: { rank: rankOf, suit: suitIdx },
+    },
   );
 
   ctx.el.innerHTML = `
@@ -67,7 +70,10 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   $("#rm-tools").addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const sort = t.closest<HTMLElement>("[data-sort]");
-    if (sort) arranger.setMode(sort.dataset.sort as SortMode);
+    if (sort) {
+      const note = arranger.setMode(sort.dataset.sort as SortMode);
+      if (note) toast(note);
+    }
     else if (t.closest("[data-layout]")) arranger.toggleLayout();
     else if (t.closest("[data-glance]")) {
       renderGlance();

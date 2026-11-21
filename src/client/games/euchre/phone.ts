@@ -5,7 +5,7 @@ import type { ECard, EuchreEvent, EuchrePrivate, EuchrePublic, Suit } from "../.
 import { effSuit, power, shortCard, SUIT_NAMES, SUITS, TEAM_EMOJI, TEAM_NAMES } from "../../../shared/games/euchre/engine";
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
-import { attachReorder, fitHand, HandArranger } from "../../handArrange";
+import { attachReorder, fitHand, HandArranger, type SortMode } from "../../handArrange";
 import { $, avatar, esc, toast } from "../../ui";
 import { tableSizeMenu } from "../tableSize";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
@@ -31,7 +31,8 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
       suit: (a, b) => suitKey(a) - suitKey(b) || power(b, trumpNow(), effSuit(b, trumpNow())) - power(a, trumpNow(), effSuit(a, trumpNow())),
       rank: (a, b) => RANK_ORDER[b.rank]! - RANK_ORDER[a.rank]! || SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit),
     },
-    { defaultMode: "suit" },
+    // Piles by rank (aces first); stacks by suit (trump first).
+    { defaultMode: "suit", groups: { rank: (c) => -RANK_ORDER[c.rank]!, suit: suitKey } },
   );
 
   ctx.el.innerHTML = `
@@ -71,7 +72,10 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
   $("#eu-tools").addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const sort = t.closest<HTMLElement>("[data-sort]");
-    if (sort) arranger.setMode(sort.dataset.sort as "rank" | "suit" | "free");
+    if (sort) {
+      const note = arranger.setMode(sort.dataset.sort as SortMode);
+      if (note) toast(note);
+    }
     else if (t.closest("[data-layout]")) arranger.toggleLayout();
     else if (t.closest("[data-glance]")) {
       renderGlance();
