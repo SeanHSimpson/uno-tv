@@ -40,6 +40,7 @@ Match the top card by **color** or **symbol**, or play a **Wild**. The first per
 ### Playing cards on your phone
 
 - **Swipe a card up** toward the TV to play it. The card glows once you've swiped far enough, and snaps back if you let go early.
+- **Arrange your hand:** **Color** (by color, then number), **Number** (all your 7s together, all your skips…), or drag a card **sideways** to put it anywhere you like (**Free**). Dragging up still plays the card: the first direction you move decides.
 - Or **tap a card** to raise it, then **tap it again** to play.
 - On Android your phone vibrates when it's your turn. iPhones don't let websites vibrate, so you get a chime and a big "Your turn!" flash instead.
 

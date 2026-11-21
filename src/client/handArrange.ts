@@ -50,6 +50,8 @@ export class HandArranger<C extends Card> {
   suitStyle: SuitStyle;
   private rowsOf?: (c: C) => { row: number; col: number } | null;
   private groups?: { rank: (c: C) => number; suit: (c: C) => number };
+  private order?: SortMode[];
+  private labels: Record<SortMode, string>;
 
   constructor(
     private game: string,
@@ -60,10 +62,16 @@ export class HandArranger<C extends Card> {
       rowsOf?: (c: C) => { row: number; col: number } | null;
       /** Which pile a card goes in when grouped by rank / by suit (lower keys first). */
       groups?: { rank: (c: C) => number; suit: (c: C) => number };
+      /** Which sort buttons to show, in order (default rank, suit, [rows], free). */
+      modes?: SortMode[];
+      /** Button names, e.g. OhNo!'s "Color" and "Number". */
+      labels?: Partial<Record<SortMode, string>>;
     } = {},
   ) {
     this.rowsOf = opts.rowsOf;
     this.groups = opts.groups;
+    this.order = opts.modes;
+    this.labels = { ...SORT_LABEL, ...opts.labels };
     this.mode = loadStr(`${game}.sort`, this.modes(), opts.defaultMode ?? "rank");
     this.layout = loadStr(`${game}.layout`, ["grid", "fan"] as const, "grid");
     this.rankStyle = loadStr(`${game}.rankStyle`, ["piles", "columns"] as const, "piles");
@@ -71,6 +79,7 @@ export class HandArranger<C extends Card> {
   }
 
   private modes(): SortMode[] {
+    if (this.order) return this.order;
     return this.rowsOf ? ["rank", "suit", "rows", "free"] : ["rank", "suit", "free"];
   }
 
@@ -117,11 +126,11 @@ export class HandArranger<C extends Card> {
       if (mode === "rank") {
         this.rankStyle = this.rankStyle === "piles" ? "columns" : "piles";
         saveStr(`${this.game}.rankStyle`, this.rankStyle);
-        note = `Rank · ${this.rankStyle}`;
+        note = `${this.labels.rank} · ${this.rankStyle}`;
       } else if (mode === "suit") {
         this.suitStyle = this.suitStyle === "rows" ? "columns" : "rows";
         saveStr(`${this.game}.suitStyle`, this.suitStyle);
-        note = `Suit · ${this.suitStyle}`;
+        note = `${this.labels.suit} · ${this.suitStyle}`;
       }
     }
     // Switching to "Free" starts from whatever is on screen right now.
@@ -157,16 +166,16 @@ export class HandArranger<C extends Card> {
   }
 
   /** The little toolbar above the hand. Buttons carry data-sort / data-layout / data-glance. */
-  toolbar(opts: { glance?: string } = {}): string {
+  toolbar(opts: { glance?: string; fan?: boolean } = {}): string {
     const modes = this.modes();
     // Only your own order can be fanned: the other sorts already place every card.
     const layoutBtn =
-      this.mode !== "free"
+      this.mode !== "free" || opts.fan === false
         ? ""
         : `<button class="tool-btn" data-layout aria-label="${this.layout === "fan" ? "Show cards in a grid" : "Fan the cards like a real hand"}">${this.layout === "fan" ? "▦ Grid" : "🂠 Fan"}</button>`;
     return `<div class="hand-tools">
       <div class="seg" role="group" aria-label="Sort your cards">${modes
-        .map((m) => `<button class="seg-btn ${this.mode === m ? "on" : ""}" data-sort="${m}" aria-pressed="${this.mode === m}">${SORT_LABEL[m]}${this.mode === m ? this.styleTag(m) : ""}</button>`)
+        .map((m) => `<button class="seg-btn ${this.mode === m ? "on" : ""}" data-sort="${m}" aria-pressed="${this.mode === m}">${this.labels[m]}${this.mode === m ? this.styleTag(m) : ""}</button>`)
         .join("")}</div>
       ${layoutBtn}
       ${opts.glance ? `<button class="tool-btn" data-glance>${opts.glance}</button>` : ""}
@@ -319,7 +328,19 @@ export function fitHand(
  * Let the player drag cards around inside `box` to reorder them.
  * `onDrop` gets the new order of card ids; `onMove` runs after each shuffle (to re-fan).
  */
-export function attachReorder(box: HTMLElement, opts: { onDrop(ids: number[]): void; onMove?(): void; signal: AbortSignal }) {
+export function attachReorder(
+  box: HTMLElement,
+  opts: {
+    onDrop(ids: number[]): void;
+    onMove?(): void;
+    signal: AbortSignal;
+    /** The cards (direct children of box). Default ".pcard". */
+    selector?: string;
+    /** May this movement (from where the finger went down) start a drag? E.g. OhNo!: only sideways. */
+    canStart?(dx: number, dy: number): boolean;
+  },
+) {
+  const sel = opts.selector ?? ".pcard";
   type Drag = { el: HTMLElement; pointerId: number; sx: number; sy: number; started: boolean; gx: number; gy: number };
   let drag: Drag | null = null;
   let swallowClick = false;
@@ -336,7 +357,7 @@ export function attachReorder(box: HTMLElement, opts: { onDrop(ids: number[]): v
     "pointerdown",
     (e) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      const el = (e.target as HTMLElement).closest<HTMLElement>(".pcard");
+      const el = (e.target as HTMLElement).closest<HTMLElement>(sel);
       if (!el || el.parentElement !== box) return;
       const r = el.getBoundingClientRect();
       drag = { el, pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, started: false, gx: e.clientX - r.left, gy: e.clientY - r.top };
@@ -351,6 +372,7 @@ export function attachReorder(box: HTMLElement, opts: { onDrop(ids: number[]): v
       if (!d || e.pointerId !== d.pointerId) return;
       if (!d.started) {
         if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 10) return;
+        if (opts.canStart && !opts.canStart(e.clientX - d.sx, e.clientY - d.sy)) return;
         d.started = true;
         try {
           d.el.setPointerCapture(e.pointerId);
@@ -364,7 +386,7 @@ export function attachReorder(box: HTMLElement, opts: { onDrop(ids: number[]): v
       // Which card is under the finger (ignoring the one being dragged)?
       const under = document
         .elementsFromPoint(e.clientX, e.clientY)
-        .map((n) => (n as HTMLElement).closest?.(".pcard") as HTMLElement | null)
+        .map((n) => (n as HTMLElement).closest?.(sel) as HTMLElement | null)
         .find((n) => n && n !== d.el && n.parentElement === box);
       if (under) {
         const kids = [...box.children];
@@ -400,7 +422,7 @@ export function attachReorder(box: HTMLElement, opts: { onDrop(ids: number[]): v
     box.classList.remove("reordering");
     swallowClick = true;
     setTimeout(() => (swallowClick = false), 50);
-    opts.onDrop([...box.querySelectorAll<HTMLElement>(":scope > .pcard")].map((el) => Number(el.dataset.id)));
+    opts.onDrop([...box.querySelectorAll<HTMLElement>(`:scope > ${sel}`)].map((el) => Number(el.dataset.id)));
   };
   window.addEventListener("pointerup", end, { signal });
   window.addEventListener("pointercancel", end, { signal });

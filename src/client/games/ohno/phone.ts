@@ -1,8 +1,9 @@
 // OhNo! on a phone: your hand, the pile, OhNo!/Catch, color picker and round results.
 
-import { COLORS, type Color, type GameEvent, type PrivateState, type PublicState } from "../../../shared/games/ohno/types";
+import { COLORS, type Card, type Color, type GameEvent, type PrivateState, type PublicState } from "../../../shared/games/ohno/types";
 import { audio, haptic } from "../../audio";
-import { cardEl, COLOR_NAMES, shapeSvg, shortLabel, sortHand } from "../../cards";
+import { byColor, byNumber, cardEl, COLOR_NAMES, shapeSvg, shortLabel } from "../../cards";
+import { attachReorder, HandArranger, type SortMode } from "../../handArrange";
 import { confetti } from "../../fx";
 import { $, avatar, esc, fly, reducedMotion, toast } from "../../ui";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
@@ -15,6 +16,7 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
   <div class="ohno-phone">
     <section class="ph-status" id="ph-status"></section>
     <section class="ph-catch" id="ph-catch"></section>
+    <section class="hand-toolbar" id="oh-tools"></section>
     <main class="hand" id="hand" aria-label="Your hand"></main>
     <footer class="ph-actions" id="ph-actions">
       <button class="btn btn-ghost" id="btn-draw">Draw</button>
@@ -38,6 +40,12 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
   let wildPending: number | null = null;
   let prevHandIds = new Set<number>();
   let wasMyTurn = false;
+  // Color (today's sort), Number, or Free (drag cards sideways to arrange them yourself).
+  const arranger = new HandArranger<Card>(
+    "ohno",
+    { suit: byColor, rank: byNumber },
+    { defaultMode: "suit", modes: ["suit", "rank", "free"], labels: { suit: "Color", rank: "Number" } },
+  );
   const send = ctx.send;
   const playerName = (id: string | null) => state?.players.find((p) => p.id === id)?.name ?? "someone";
 
@@ -117,6 +125,28 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
 
   const hand = $("#hand");
   let suppressClick = false;
+  $("#oh-tools").addEventListener(
+    "click",
+    (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>("[data-sort]");
+      if (!b) return;
+      arranger.setMode(b.dataset.sort as SortMode);
+      haptic("select");
+      renderHand();
+    },
+    on,
+  );
+  // Sideways drag = rearrange (up = swipe to play, below). The first direction decides.
+  const reorder = attachReorder(hand, {
+    signal: ac.signal,
+    selector: ".card",
+    canStart: (dx, dy) => !drag?.active && Math.abs(dx) > Math.abs(dy),
+    onDrop: (ids) => {
+      arranger.setOrder(ids);
+      haptic("select");
+      renderHand();
+    },
+  });
   hand.addEventListener("click", (e) => {
     if (suppressClick) {
       suppressClick = false;
@@ -136,6 +166,7 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
     "pointermove",
     (e) => {
       if (!drag || e.pointerId !== drag.pointer) return;
+      if (reorder.dragging()) return void (drag = null);
       const dx = e.clientX - drag.x0;
       const dy = e.clientY - drag.y0;
       if (!drag.active) {
@@ -240,7 +271,13 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
       prevHandIds = new Set();
       return;
     }
-    const sorted = sortHand(m.hand);
+    $("#oh-tools").innerHTML = arranger.toolbar({ fan: false });
+    // Don't swap the cards out from under a finger that's on one (maybe starting a drag).
+    if (reorder.holding()) {
+      reorder.later(() => state && me && renderHand());
+      return;
+    }
+    const sorted = arranger.arrange(m.hand);
     const myTurn = s.turnId === pid;
     const existing = new Map([...hand.children].map((c) => [Number((c as HTMLElement).dataset.id), c as HTMLElement]));
     const fresh: HTMLElement[] = [];
