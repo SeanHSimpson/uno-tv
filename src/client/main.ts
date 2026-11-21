@@ -8,7 +8,7 @@ import { mountTv } from "./shell/tv";
 import { $, avatarPicker, esc, toast } from "./ui";
 
 // Routes (query-string based so it works as a plain static site):
-//   /                 home: host or join
+//   /                 home: host, join, or watch a table from another screen
 //   /?tv=CODE         the shared TV table
 //   /?join=CODE       phone: pick a name (QR codes point here)
 //   /?play=CODE       phone: in the game (survives refresh)
@@ -50,6 +50,12 @@ function home(prefill: string) {
         <h2>On the TV?</h2>
         <p class="muted">Open this page on the big screen and start a table. Everyone joins with their phone.</p>
         <button class="btn btn-ghost btn-xl wide" id="host-btn">Host on this screen</button>
+        <div class="or-line"><span>or watch a table already going</span></div>
+        <form class="watch-form" id="watch-form" autocomplete="off">
+          <label>Room code<input id="watch-code" class="code-input" maxlength="4" required placeholder="ABCD" autocapitalize="characters" inputmode="text" enterkeyhint="go"></label>
+          <button class="btn btn-ghost wide" type="submit">Watch table</button>
+        </form>
+        <p class="muted small">Far away? Put the table on your own screen, then join on your phone with the same code.</p>
       </div>
     </div>
   </div>`;
@@ -98,6 +104,20 @@ function home(prefill: string) {
     saveAvatar(pickedAvatar);
     history.replaceState(null, "", `/?play=${code}`);
     mountPhone(root, code, name);
+  });
+
+  // Watch someone else's table on this screen (a friend or family member somewhere else).
+  const watchInput = $("#watch-code") as HTMLInputElement;
+  watchInput.addEventListener("input", () => (watchInput.value = norm(watchInput.value)));
+  $("#watch-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    audio.unlock(); // the TV plays music; this click lets it
+    const code = norm(watchInput.value);
+    if (code.length !== 4) return toast("Room codes are 4 letters. Ask whoever's hosting.");
+    if (!(await roomExists(code).catch(() => false))) return toast("Can't find that room. Check the code on the TV.", "error");
+    history.replaceState(null, "", `/?tv=${code}`);
+    mountTv(root, code);
+    document.documentElement.requestFullscreen?.().catch(() => {});
   });
 
   $("#host-btn").addEventListener("click", async (e) => {
