@@ -31,7 +31,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
       suit: (a, b) => suitKey(a) - suitKey(b) || power(b, trumpNow(), effSuit(b, trumpNow())) - power(a, trumpNow(), effSuit(a, trumpNow())),
       rank: (a, b) => RANK_ORDER[b.rank]! - RANK_ORDER[a.rank]! || SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit),
     },
-    "suit",
+    { defaultMode: "suit" },
   );
 
   ctx.el.innerHTML = `
@@ -83,7 +83,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
   });
   const reorder = attachReorder(hand, {
     signal: ac.signal,
-    onMove: () => fitHand(hand, arranger.layout, 130),
+    onMove: () => fitHand(hand, arranger, 130),
     onDrop: (ids) => {
       arranger.setOrder(ids);
       haptic("select");
@@ -354,7 +354,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
 
   function layoutHand() {
     if (!me || reorder.dragging()) return;
-    fitHand(hand, arranger.layout, 130);
+    fitHand(hand, arranger, 130);
   }
 
   function renderResults() {

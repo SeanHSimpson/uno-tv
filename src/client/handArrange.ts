@@ -3,11 +3,17 @@
 //   or keep your own order ("Free"),
 // - drag a card to move it (which switches to your own order),
 // - lay the hand out as a tidy grid, or fanned and overlapping like cards held in your hand.
+// - Rank and Suit group the cards: Rank as piles or columns, Suit as stacked rows or columns
+//   (tap the button again to switch; see handPiles.ts).
 // Taps still select cards: a press only becomes a drag once the finger moves.
+
+import { layoutPiles, type PileStyle } from "./handPiles";
 
 type Card = { id: number };
 export type SortMode = "rank" | "suit" | "rows" | "free";
 export type HandLayout = "grid" | "fan";
+export type RankStyle = "piles" | "columns";
+export type SuitStyle = "rows" | "columns";
 /** Where each card sits in the "Rows" layout: row and column (0-based), and the size of the grid. */
 export type HandMatrix = { rows: number; cols: number; at: Map<number, [number, number]> };
 
@@ -38,16 +44,30 @@ export class HandArranger<C extends Card> {
   private shown: number[] = [];
   /** Set while sorted into rows: where each card goes. */
   matrix: HandMatrix | null = null;
+  /** Set while grouped by rank or suit: the groups (card ids) and how to lay them out. */
+  piles: { style: PileStyle; groups: number[][] } | null = null;
+  rankStyle: RankStyle;
+  suitStyle: SuitStyle;
+  private rowsOf?: (c: C) => { row: number; col: number } | null;
+  private groups?: { rank: (c: C) => number; suit: (c: C) => number };
 
   constructor(
     private game: string,
     private sorts: { rank: (a: C, b: C) => number; suit: (a: C, b: C) => number },
-    defaultMode: SortMode = "rank",
-    /** For "Rows": which row a card belongs to (lower first) and its column value. Jokers: null. */
-    private rowsOf?: (c: C) => { row: number; col: number } | null,
+    opts: {
+      defaultMode?: SortMode;
+      /** For "Rows": which row a card belongs to (lower first) and its column value. Jokers: null. */
+      rowsOf?: (c: C) => { row: number; col: number } | null;
+      /** Which pile a card goes in when grouped by rank / by suit (lower keys first). */
+      groups?: { rank: (c: C) => number; suit: (c: C) => number };
+    } = {},
   ) {
-    this.mode = loadStr(`${game}.sort`, this.modes(), defaultMode);
+    this.rowsOf = opts.rowsOf;
+    this.groups = opts.groups;
+    this.mode = loadStr(`${game}.sort`, this.modes(), opts.defaultMode ?? "rank");
     this.layout = loadStr(`${game}.layout`, ["grid", "fan"] as const, "grid");
+    this.rankStyle = loadStr(`${game}.rankStyle`, ["piles", "columns"] as const, "piles");
+    this.suitStyle = loadStr(`${game}.suitStyle`, ["rows", "columns"] as const, "rows");
   }
 
   private modes(): SortMode[] {
@@ -57,7 +77,22 @@ export class HandArranger<C extends Card> {
   arrange(cards: C[]): C[] {
     let out: C[];
     this.matrix = null;
-    if (this.mode === "rows" && this.rowsOf) {
+    this.piles = null;
+    if ((this.mode === "rank" || this.mode === "suit") && this.groups) {
+      const mode = this.mode;
+      const key = this.groups[mode];
+      const byKey = new Map<number, C[]>();
+      for (const c of [...cards].sort(this.sorts[mode])) {
+        const k = key(c);
+        if (!byKey.has(k)) byKey.set(k, []);
+        byKey.get(k)!.push(c);
+      }
+      const groups = [...byKey.keys()].sort((a, b) => a - b).map((k) => byKey.get(k)!);
+      out = groups.flat();
+      const style: PileStyle =
+        mode === "rank" ? (this.rankStyle === "piles" ? "piles" : "cascade") : this.suitStyle === "rows" ? "rows" : "cascade";
+      this.piles = { style, groups: groups.map((g) => g.map((c) => c.id)) };
+    } else if (this.mode === "rows" && this.rowsOf) {
       const r = rowsLayout(cards, this.rowsOf);
       out = r.out;
       this.matrix = r.matrix;
@@ -72,11 +107,28 @@ export class HandArranger<C extends Card> {
     return out;
   }
 
-  setMode(mode: SortMode) {
-    // Switching to "My order" starts from whatever is on screen right now.
-    if (mode === "free") this.custom = [...this.shown];
+  /**
+   * Pick a sort. Tapping Rank or Suit while it's already on switches its version
+   * (piles ↔ columns, stacked rows ↔ columns) and returns a line to show the player.
+   */
+  setMode(mode: SortMode): string | null {
+    let note: string | null = null;
+    if (mode === this.mode && this.groups) {
+      if (mode === "rank") {
+        this.rankStyle = this.rankStyle === "piles" ? "columns" : "piles";
+        saveStr(`${this.game}.rankStyle`, this.rankStyle);
+        note = `Rank · ${this.rankStyle}`;
+      } else if (mode === "suit") {
+        this.suitStyle = this.suitStyle === "rows" ? "columns" : "rows";
+        saveStr(`${this.game}.suitStyle`, this.suitStyle);
+        note = `Suit · ${this.suitStyle}`;
+      }
+    }
+    // Switching to "Free" starts from whatever is on screen right now.
+    if (mode === "free" && this.mode !== "free") this.custom = [...this.shown];
     this.mode = mode;
     saveStr(`${this.game}.sort`, mode);
+    return note;
   }
 
   toggleLayout() {
@@ -97,17 +149,24 @@ export class HandArranger<C extends Card> {
     this.custom = [];
   }
 
+  private styleTag(m: SortMode) {
+    if (!this.groups) return "";
+    if (m === "rank") return `<small>${this.rankStyle}</small>`;
+    if (m === "suit") return `<small>${this.suitStyle}</small>`;
+    return "";
+  }
+
   /** The little toolbar above the hand. Buttons carry data-sort / data-layout / data-glance. */
   toolbar(opts: { glance?: string } = {}): string {
     const modes = this.modes();
-    // In rows every card has a fixed spot, so there's nothing to fan.
+    // Only your own order can be fanned: the other sorts already place every card.
     const layoutBtn =
-      this.mode === "rows"
+      this.mode !== "free"
         ? ""
         : `<button class="tool-btn" data-layout aria-label="${this.layout === "fan" ? "Show cards in a grid" : "Fan the cards like a real hand"}">${this.layout === "fan" ? "▦ Grid" : "🂠 Fan"}</button>`;
     return `<div class="hand-tools">
       <div class="seg" role="group" aria-label="Sort your cards">${modes
-        .map((m) => `<button class="seg-btn ${this.mode === m ? "on" : ""}" data-sort="${m}" aria-pressed="${this.mode === m}">${SORT_LABEL[m]}</button>`)
+        .map((m) => `<button class="seg-btn ${this.mode === m ? "on" : ""}" data-sort="${m}" aria-pressed="${this.mode === m}">${SORT_LABEL[m]}${this.mode === m ? this.styleTag(m) : ""}</button>`)
         .join("")}</div>
       ${layoutBtn}
       ${opts.glance ? `<button class="tool-btn" data-glance>${opts.glance}</button>` : ""}
@@ -152,14 +211,42 @@ export function rowsLayout<C extends Card>(cards: C[], rowsOf: (c: C) => { row: 
  * Grid: rows and columns. Fan: one or two overlapping, slightly curved rows.
  * Matrix ("Rows" sort): cards at fixed row/column spots, overlapping only when space is short.
  */
-export function fitHand(box: HTMLElement, layout: HandLayout, maxCw: number, matrix?: HandMatrix | null) {
+export function fitHand(
+  box: HTMLElement,
+  arr: { mode: SortMode; layout: HandLayout; matrix: HandMatrix | null; piles: { style: PileStyle; groups: number[][] } | null },
+  maxCw: number,
+) {
+  const { matrix, piles } = arr;
+  const layout: HandLayout = arr.mode === "free" ? arr.layout : "grid";
   const cards = [...box.querySelectorAll<HTMLElement>(":scope > .pcard")];
   const n = Math.max(1, cards.length);
   const cs = getComputedStyle(box);
   const W = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8;
   const H = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 16;
-  box.classList.toggle("fan", layout === "fan" && !matrix);
-  box.classList.toggle("rows", !!matrix);
+  box.classList.toggle("fan", layout === "fan" && !matrix && !piles);
+  box.classList.toggle("rows", !!matrix && !piles);
+  box.classList.toggle("placed", !!piles);
+  if (piles) {
+    // Grouped: every card absolutely placed (see handPiles.ts).
+    const spots = layoutPiles(piles.groups, piles.style, { W, H }, maxCw);
+    const left = parseFloat(cs.paddingLeft) + 4;
+    const top = parseFloat(cs.paddingTop) + 8;
+    for (const el of cards) {
+      for (const v of ["--k", "--rot", "--dip"]) el.style.removeProperty(v);
+      el.style.gridArea = "";
+      const s = spots.get(Number(el.dataset.id));
+      if (!s) continue;
+      el.style.left = `${(left + s.x).toFixed(1)}px`;
+      el.style.top = `${(top + s.y).toFixed(1)}px`;
+      el.style.setProperty("--cw", `${s.w}px`);
+    }
+    return;
+  }
+  for (const el of cards) {
+    el.style.left = "";
+    el.style.top = "";
+    el.style.removeProperty("--cw");
+  }
   if (matrix) {
     for (const el of cards) for (const v of ["--k", "--rot", "--dip"]) el.style.removeProperty(v);
     const { rows: R, cols: C } = matrix;

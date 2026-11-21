@@ -29,8 +29,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       rank: (a, b) => rankOf(a) - rankOf(b) || suitOf(a).localeCompare(suitOf(b)) || a.id - b.id,
       suit: (a, b) => suitOf(a).localeCompare(suitOf(b)) || rankOf(a) - rankOf(b) || a.id - b.id,
     },
-    "rank",
-    (c) => (c.suit ? { row: ROW_SUITS.indexOf(c.suit), col: c.rank } : null),
+    { rowsOf: (c) => (c.suit ? { row: ROW_SUITS.indexOf(c.suit), col: c.rank } : null) },
   );
 
   ctx.el.innerHTML = `
@@ -80,7 +79,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   });
   const reorder = attachReorder(hand, {
     signal: ac.signal,
-    onMove: () => fitHand(hand, arranger.layout, 120, arranger.matrix),
+    onMove: () => fitHand(hand, arranger, 120),
     onDrop: (ids) => {
       arranger.setOrder(ids);
       haptic("select");
@@ -251,7 +250,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   /** Same idea as OhNo!: size cards so the whole hand fits without scrolling. */
   function layoutHand() {
     if (!me || reorder.dragging()) return;
-    fitHand(hand, arranger.layout, 120, arranger.matrix);
+    fitHand(hand, arranger, 120);
   }
 
   /** A look at the whole table from the phone: everyone's groups, big enough to read. */
