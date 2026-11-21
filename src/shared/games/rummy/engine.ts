@@ -93,7 +93,6 @@ export type RummyAction =
 /** 10 cards for the first four contracts, 12 for the bigger ones (3 runs needs at least 12). */
 export const handSize = (contractIndex: number) => (contractIndex >= 4 ? 12 : 10);
 export const contractOf = (s: RummyState): Contract => CONTRACTS[s.plan[s.round - 1]!]!;
-export const isFinalContract = (c: Contract) => c.runs === 3; // must go out all at once
 
 const sortHand = (h: PCard[]) => h.sort((a, b) => (a.rank || 99) - (b.rank || 99) || (a.suit ?? "").localeCompare(b.suit ?? "") || a.id - b.id);
 
@@ -248,8 +247,6 @@ export function layDown(s: RummyState, pid: string, cardIds: number[]): RummyEve
   if (p.down) fail("You're already down this round. Add cards to groups instead.");
   const cards = takeFromHand(p, cardIds);
   const contract = contractOf(s);
-  const final = isFinalContract(contract);
-  if (final && cards.length !== p.hand.length) fail("Last round: lay down your whole hand at once (3 runs, no discard).");
   const left = contractLeft(contract, p.laid);
   let melds = findContract(cards, left, true);
   let used = left;
@@ -274,8 +271,8 @@ export function layDown(s: RummyState, pid: string, cardIds: number[]): RummyEve
   return events.concat(checkOut(s, p));
 }
 
-/** The "lay down in parts" house rule (never in the last round, which goes out all at once). */
-export const canLayParts = (s: RummyState) => !!s.settings.parts && !isFinalContract(contractOf(s));
+/** The "lay down in parts" house rule (every round, the last one included). */
+export const canLayParts = (s: RummyState) => !!s.settings.parts;
 
 /** The host changes how big the laid-down cards look on the TV. */
 export function setTable(s: RummyState, isHost: boolean, size: number): RummyEvent[] {
@@ -289,7 +286,6 @@ export function setTable(s: RummyState, isHost: boolean, size: number): RummyEve
 export function hit(s: RummyState, pid: string, cardIds: number[], meldId: number): RummyEvent[] {
   const p = requireTurn(s, pid, "play");
   if (!p.down) fail(p.laid.sets + p.laid.runs ? "Lay down the rest of your contract before adding to groups." : "Lay down your own contract before adding to groups.");
-  if (isFinalContract(contractOf(s))) fail("Last round: there's no adding to groups.");
   const meld = s.melds.find((m) => m.id === Number(meldId)) ?? fail("That group isn't on the table.");
   const cards = takeFromHand(p, cardIds);
   const grown = canAdd(meld, cards);
@@ -397,7 +393,6 @@ export function publicView(s: RummyState) {
     contract,
     contractText: contractLabel(contract),
     plan: s.plan.map((i) => contractLabel(CONTRACTS[i]!)),
-    finalRound: isFinalContract(contract),
     parts: canLayParts(s),
     table: s.settings.table ?? 1,
     turnId: s.phase === "playing" ? current(s).id : null,

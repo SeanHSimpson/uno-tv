@@ -5,7 +5,7 @@ import type { RummyEvent, RummyPrivate, RummyPublic } from "../../../shared/game
 import { selectionHint } from "../../../shared/games/rummy/hint";
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
-import { attachReorder, fitHand, HandArranger } from "../../handArrange";
+import { attachReorder, fitHand, HandArranger, type SortMode } from "../../handArrange";
 import { pcardEl, pcardHtml, shortCard } from "../../playingCards";
 import { $, avatar, esc, toast } from "../../ui";
 import { tableSizeMenu } from "../tableSize";
@@ -21,10 +21,17 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   let wasMyTurn = false;
   const rankOf = (c: PCard) => c.rank || 99;
   const suitOf = (c: PCard) => c.suit ?? "z";
-  const arranger = new HandArranger<PCard>("rummy", {
-    rank: (a, b) => rankOf(a) - rankOf(b) || suitOf(a).localeCompare(suitOf(b)) || a.id - b.id,
-    suit: (a, b) => suitOf(a).localeCompare(suitOf(b)) || rankOf(a) - rankOf(b) || a.id - b.id,
-  });
+  // Rows: clubs, diamonds, spades, hearts top to bottom (colors alternate), ace to king across.
+  const ROW_SUITS = ["C", "D", "S", "H"];
+  const arranger = new HandArranger<PCard>(
+    "rummy",
+    {
+      rank: (a, b) => rankOf(a) - rankOf(b) || suitOf(a).localeCompare(suitOf(b)) || a.id - b.id,
+      suit: (a, b) => suitOf(a).localeCompare(suitOf(b)) || rankOf(a) - rankOf(b) || a.id - b.id,
+    },
+    "rank",
+    (c) => (c.suit ? { row: ROW_SUITS.indexOf(c.suit), col: c.rank } : null),
+  );
 
   ctx.el.innerHTML = `
   <div class="rummy-phone">
@@ -61,7 +68,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   $("#rm-tools").addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const sort = t.closest<HTMLElement>("[data-sort]");
-    if (sort) arranger.setMode(sort.dataset.sort as "rank" | "suit" | "free");
+    if (sort) arranger.setMode(sort.dataset.sort as SortMode);
     else if (t.closest("[data-layout]")) arranger.toggleLayout();
     else if (t.closest("[data-glance]")) {
       renderGlance();
@@ -73,7 +80,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   });
   const reorder = attachReorder(hand, {
     signal: ac.signal,
-    onMove: () => fitHand(hand, arranger.layout, 120),
+    onMove: () => fitHand(hand, arranger.layout, 120, arranger.matrix),
     onDrop: (ids) => {
       arranger.setOrder(ids);
       haptic("select");
@@ -157,9 +164,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     else if (m.canPlay)
       msg = m.down
         ? `<b>Your turn.</b> Add cards to groups, then pick one card to discard.`
-        : s.finalRound
-          ? `<b>Your turn.</b> To go out, select your whole hand and lay down 3 runs. Otherwise discard one card.`
-          : partDown(m)
+        : partDown(m)
             ? `<b>Your turn.</b> Lay down the rest of your contract (${esc(contractLabel(m.left))}), or pick one card to discard.`
             : s.parts
               ? `<b>Your turn.</b> Select a set or run from your contract to lay down (one at a time is fine), or pick one card to discard.`
@@ -192,14 +197,14 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     const hit = $("#rm-hit") as HTMLButtonElement;
     const dis = $("#rm-discard") as HTMLButtonElement;
     const playing = m.canPlay;
-    const whole = cards.length > 0 && !!findContract(cards, m.left, true) && (!s.finalRound || cards.length === m.hand.length);
+    const whole = cards.length > 0 && !!findContract(cards, m.left, true);
     const part = !whole && s.parts && cards.length > 0 ? partOfContract(cards, m.left) : null;
     const contractOk = !m.down && (whole || !!part);
     lay.hidden = !playing || m.down || cards.length < 3;
     lay.disabled = !contractOk;
     lay.textContent = whole ? `Lay down ✓` : part ? `Lay down ${contractLabel(part.used)} ✓` : `Lay down (${cards.length} selected)`;
     lay.classList.toggle("ready", contractOk);
-    const fits = playing && m.down && !s.finalRound ? fittingMelds() : [];
+    const fits = playing && m.down ? fittingMelds() : [];
     hit.hidden = !fits.length;
     hit.textContent = fits.length === 1 ? "Add to group" : `Add to a group (${fits.length})`;
     dis.hidden = !playing || cards.length !== 1;
@@ -208,7 +213,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     // Say what the selection makes, so a greyed-out "Lay down" is never a mystery.
     const hintEl = $("#rm-hint");
     const started = m.left.sets + m.left.runs < s.contract.sets + s.contract.runs;
-    const hint = !m.down && s.phase === "playing" ? selectionHint(cards, m.left, { final: s.finalRound, handSize: m.hand.length, parts: s.parts, started }) : null;
+    const hint = !m.down && s.phase === "playing" ? selectionHint(cards, m.left, { parts: s.parts, started }) : null;
     hintEl.hidden = !hint;
     if (hint) {
       hintEl.textContent = hint.text;
@@ -225,8 +230,9 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   function renderHand() {
     const m = me!;
     $("#rm-tools").innerHTML = arranger.toolbar({ glance: "👀 Table" });
-    // Don't yank the cards out from under a finger that's dragging one.
-    if (reorder.dragging()) {
+    // Don't yank the cards out from under a finger that's on one (maybe starting a drag).
+    if (reorder.holding()) {
+      reorder.later(() => me && renderHand());
       return;
     }
     hand.replaceChildren(
@@ -245,7 +251,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   /** Same idea as OhNo!: size cards so the whole hand fits without scrolling. */
   function layoutHand() {
     if (!me || reorder.dragging()) return;
-    fitHand(hand, arranger.layout, 120);
+    fitHand(hand, arranger.layout, 120, arranger.matrix);
   }
 
   /** A look at the whole table from the phone: everyone's groups, big enough to read. */

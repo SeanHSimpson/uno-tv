@@ -1,14 +1,17 @@
 // Arranging the cards in your hand on a phone (Contract Rummy and Euchre):
-// - sort by rank, by suit, or keep your own order ("My order"),
+// - sort by rank, by suit, in suit rows with ranks lined up in columns ("Rows", Rummy),
+//   or keep your own order ("Free"),
 // - drag a card to move it (which switches to your own order),
 // - lay the hand out as a tidy grid, or fanned and overlapping like cards held in your hand.
 // Taps still select cards: a press only becomes a drag once the finger moves.
 
 type Card = { id: number };
-export type SortMode = "rank" | "suit" | "free";
+export type SortMode = "rank" | "suit" | "rows" | "free";
 export type HandLayout = "grid" | "fan";
+/** Where each card sits in the "Rows" layout: row and column (0-based), and the size of the grid. */
+export type HandMatrix = { rows: number; cols: number; at: Map<number, [number, number]> };
 
-const SORT_LABEL: Record<SortMode, string> = { rank: "Rank", suit: "Suit", free: "My order" };
+const SORT_LABEL: Record<SortMode, string> = { rank: "Rank", suit: "Suit", rows: "Rows", free: "Free" };
 
 function loadStr<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
@@ -33,24 +36,37 @@ export class HandArranger<C extends Card> {
   /** Your own order (card ids). New cards go on the end. */
   private custom: number[] = [];
   private shown: number[] = [];
+  /** Set while sorted into rows: where each card goes. */
+  matrix: HandMatrix | null = null;
 
   constructor(
     private game: string,
     private sorts: { rank: (a: C, b: C) => number; suit: (a: C, b: C) => number },
     defaultMode: SortMode = "rank",
+    /** For "Rows": which row a card belongs to (lower first) and its column value. Jokers: null. */
+    private rowsOf?: (c: C) => { row: number; col: number } | null,
   ) {
-    this.mode = loadStr(`${game}.sort`, ["rank", "suit", "free"] as const, defaultMode);
+    this.mode = loadStr(`${game}.sort`, this.modes(), defaultMode);
     this.layout = loadStr(`${game}.layout`, ["grid", "fan"] as const, "grid");
+  }
+
+  private modes(): SortMode[] {
+    return this.rowsOf ? ["rank", "suit", "rows", "free"] : ["rank", "suit", "free"];
   }
 
   arrange(cards: C[]): C[] {
     let out: C[];
-    if (this.mode === "free") {
+    this.matrix = null;
+    if (this.mode === "rows" && this.rowsOf) {
+      const r = rowsLayout(cards, this.rowsOf);
+      out = r.out;
+      this.matrix = r.matrix;
+    } else if (this.mode === "free") {
       const byId = new Map(cards.map((c) => [c.id, c]));
       const kept = this.custom.filter((id) => byId.has(id));
       const fresh = cards.filter((c) => !kept.includes(c.id));
       out = [...kept.map((id) => byId.get(id)!), ...fresh];
-    } else out = [...cards].sort(this.sorts[this.mode]);
+    } else out = [...cards].sort(this.sorts[this.mode === "rows" ? "suit" : this.mode]);
     this.shown = out.map((c) => c.id);
     this.custom = [...this.shown];
     return out;
@@ -83,28 +99,91 @@ export class HandArranger<C extends Card> {
 
   /** The little toolbar above the hand. Buttons carry data-sort / data-layout / data-glance. */
   toolbar(opts: { glance?: string } = {}): string {
-    const modes: SortMode[] = ["rank", "suit", "free"];
+    const modes = this.modes();
+    // In rows every card has a fixed spot, so there's nothing to fan.
+    const layoutBtn =
+      this.mode === "rows"
+        ? ""
+        : `<button class="tool-btn" data-layout aria-label="${this.layout === "fan" ? "Show cards in a grid" : "Fan the cards like a real hand"}">${this.layout === "fan" ? "▦ Grid" : "🂠 Fan"}</button>`;
     return `<div class="hand-tools">
       <div class="seg" role="group" aria-label="Sort your cards">${modes
         .map((m) => `<button class="seg-btn ${this.mode === m ? "on" : ""}" data-sort="${m}" aria-pressed="${this.mode === m}">${SORT_LABEL[m]}</button>`)
         .join("")}</div>
-      <button class="tool-btn" data-layout aria-label="${this.layout === "fan" ? "Show cards in a grid" : "Fan the cards like a real hand"}">${this.layout === "fan" ? "▦ Grid" : "🂠 Fan"}</button>
+      ${layoutBtn}
       ${opts.glance ? `<button class="tool-btn" data-glance>${opts.glance}</button>` : ""}
     </div>`;
   }
 }
 
 /**
+ * "Rows": one row per suit (in the order rowsOf gives), cards in rank order, and every rank in
+ * its own column, so all your 4s line up down the hand. Only ranks you hold get a column.
+ * Two of the same card (two decks) start a second row for that suit; jokers get the last row.
+ */
+export function rowsLayout<C extends Card>(cards: C[], rowsOf: (c: C) => { row: number; col: number } | null) {
+  const info = cards.map((c) => ({ c, k: rowsOf(c) }));
+  const colVals = [...new Set(info.flatMap((x) => (x.k ? [x.k.col] : [])))].sort((a, b) => a - b);
+  const groups = [...new Set(info.flatMap((x) => (x.k ? [x.k.row] : [])))].sort((a, b) => a - b);
+  const at = new Map<number, [number, number]>();
+  let row = 0;
+  for (const g of groups) {
+    const mine = info.filter((x) => x.k?.row === g).sort((a, b) => a.k!.col - b.k!.col || a.c.id - b.c.id);
+    const used = new Map<number, number>(); // column -> copies placed so far
+    for (const { c, k } of mine) {
+      const n = used.get(k!.col) ?? 0;
+      used.set(k!.col, n + 1);
+      at.set(c.id, [row + n, colVals.indexOf(k!.col)]);
+    }
+    row += Math.max(...used.values());
+  }
+  const loose = info.filter((x) => !x.k).map((x) => x.c);
+  const cols = colVals.length || Math.min(Math.max(1, loose.length), 6);
+  // Jokers on their own row (wrapping if there are more of them than columns).
+  loose.forEach((c, i) => at.set(c.id, [row + Math.floor(i / cols), i % cols]));
+  row += Math.ceil(loose.length / cols);
+  // Row by row, left to right, so each card overlaps the one before and every corner shows.
+  const out = [...cards].sort((a, b) => at.get(a.id)![0] - at.get(b.id)![0] || at.get(a.id)![1] - at.get(b.id)![1]);
+  const matrix: HandMatrix = { rows: Math.max(1, row), cols, at };
+  return { out, matrix };
+}
+
+/**
  * Size the cards so the whole hand fits without scrolling.
  * Grid: rows and columns. Fan: one or two overlapping, slightly curved rows.
+ * Matrix ("Rows" sort): cards at fixed row/column spots, overlapping only when space is short.
  */
-export function fitHand(box: HTMLElement, layout: HandLayout, maxCw: number) {
+export function fitHand(box: HTMLElement, layout: HandLayout, maxCw: number, matrix?: HandMatrix | null) {
   const cards = [...box.querySelectorAll<HTMLElement>(":scope > .pcard")];
   const n = Math.max(1, cards.length);
   const cs = getComputedStyle(box);
   const W = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8;
   const H = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 16;
-  box.classList.toggle("fan", layout === "fan");
+  box.classList.toggle("fan", layout === "fan" && !matrix);
+  box.classList.toggle("rows", !!matrix);
+  if (matrix) {
+    for (const el of cards) for (const v of ["--k", "--rot", "--dip"]) el.style.removeProperty(v);
+    const { rows: R, cols: C } = matrix;
+    const gap = 6;
+    // The biggest card where each one still shows its corner: a column step of at least `fx`
+    // of a card's width, a row step of at least `fy` of its height. Overlap only as needed.
+    const size = (fx: number, fy: number) => Math.min(maxCw, W / (1 + fx * (C - 1)), H / (1.5 * (1 + fy * (R - 1))));
+    let cw = size(1, 1);
+    if (cw < 64) cw = Math.min(64, size(0.5, 0.55));
+    if (cw < 50) cw = Math.min(50, size(0.36, 0.42));
+    cw = Math.floor(cw);
+    const ch = cw * 1.5;
+    const sx = C > 1 ? Math.min(cw + gap, (W - cw) / (C - 1)) : 0;
+    const sy = R > 1 ? Math.min(ch + gap, (H - ch) / (R - 1)) : 0;
+    box.style.setProperty("--cw", `${cw}px`);
+    box.style.setProperty("--fan-cols", C > 1 ? `repeat(${C - 1}, ${sx.toFixed(1)}px) ${cw}px` : `${cw}px`);
+    box.style.setProperty("--fan-rows", R > 1 ? `repeat(${R - 1}, ${sy.toFixed(1)}px) ${ch.toFixed(1)}px` : "auto");
+    for (const el of cards) {
+      const spot = matrix.at.get(Number(el.dataset.id));
+      el.style.gridArea = spot ? `${spot[0] + 1} / ${spot[1] + 1}` : "";
+    }
+    return;
+  }
+  for (const el of cards) el.style.gridArea = "";
   if (layout === "grid") {
     const gap = n > 12 ? 4 : 6;
     let best = { w: 0, cols: 1 };
@@ -157,6 +236,7 @@ export function attachReorder(box: HTMLElement, opts: { onDrop(ids: number[]): v
   type Drag = { el: HTMLElement; pointerId: number; sx: number; sy: number; started: boolean; gx: number; gy: number };
   let drag: Drag | null = null;
   let swallowClick = false;
+  let afterRelease: (() => void) | null = null;
   const { signal } = opts;
 
   const place = (d: Drag, x: number, y: number) => {
@@ -223,6 +303,10 @@ export function attachReorder(box: HTMLElement, opts: { onDrop(ids: number[]): v
     const d = drag;
     if (!d || e.pointerId !== d.pointerId) return;
     drag = null;
+    // A redraw that waited for the finger: run it once the tap's click has landed.
+    const later = afterRelease;
+    afterRelease = null;
+    if (later) setTimeout(later, 0);
     if (!d.started) return;
     d.el.classList.remove("reorder-drag");
     d.el.style.translate = "";
@@ -231,8 +315,8 @@ export function attachReorder(box: HTMLElement, opts: { onDrop(ids: number[]): v
     setTimeout(() => (swallowClick = false), 50);
     opts.onDrop([...box.querySelectorAll<HTMLElement>(":scope > .pcard")].map((el) => Number(el.dataset.id)));
   };
-  box.addEventListener("pointerup", end, { signal });
-  box.addEventListener("pointercancel", end, { signal });
+  window.addEventListener("pointerup", end, { signal });
+  window.addEventListener("pointercancel", end, { signal });
   // The click that ends a drag isn't a tap on a card.
   box.addEventListener(
     "click",
@@ -245,5 +329,15 @@ export function attachReorder(box: HTMLElement, opts: { onDrop(ids: number[]): v
     { capture: true, signal },
   );
 
-  return { dragging: () => !!drag?.started };
+  return {
+    dragging: () => !!drag?.started,
+    /**
+     * A finger is on a card (it may be about to drag it). Redrawing the hand now would swap the
+     * card out from under it, so call `later(fn)` to redraw when it lets go instead.
+     */
+    holding: () => !!drag,
+    later: (fn: () => void) => {
+      afterRelease = fn;
+    },
+  };
 }

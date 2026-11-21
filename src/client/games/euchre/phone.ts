@@ -330,7 +330,11 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
 
   function renderHand(m: EuchrePrivate) {
     $("#eu-tools").innerHTML = arranger.toolbar({ glance: "👀 Table" });
-    if (reorder.dragging()) return;
+    // Don't yank the cards out from under a finger that's on one (maybe starting a drag).
+    if (reorder.holding()) {
+      reorder.later(() => me && renderHand(me));
+      return;
+    }
     hand.replaceChildren(
       ...arranger.arrange(m.hand).map((c) => {
         const el = ecardEl(c, "hand-card");

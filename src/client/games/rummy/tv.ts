@@ -35,9 +35,7 @@ export function rummyTv(ctx: TvCtx): GameView {
 
   function render(s: RummyPublic) {
     ctx.setStatus(`Contract Rummy · Round <b>${s.round}</b> of ${s.rounds}`);
-    $("#rm-contract").innerHTML = `<small>Round ${s.round} of ${s.rounds} · contract</small><b>${esc(s.contractText)}</b>${
-      s.finalRound ? `<em>Last round: lay down your whole hand at once, no discard</em>` : ""
-    }`;
+    $("#rm-contract").innerHTML = `<small>Round ${s.round} of ${s.rounds} · contract</small><b>${esc(s.contractText)}</b>`;
     $("#rm-stock").innerHTML = `${pcardHtml(null, "rm-pile")}<span>${s.stockCount} left</span>`;
     $("#rm-discard").innerHTML = s.discardTop ? `${pcardHtml(s.discardTop, "rm-pile rm-top-discard")}<span>Discard</span>` : `<div class="rm-empty">Empty</div><span>Discard</span>`;
     $("#rm-mayi").innerHTML = s.mayI.length ? `🙋 ${s.mayI.map((pid) => `<b>${names(pid)}</b>`).join(", ")} asked “May I?”` : "";

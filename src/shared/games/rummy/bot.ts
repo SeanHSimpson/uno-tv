@@ -3,7 +3,7 @@
 
 import type { Rng } from "../../common";
 import { canAdd, findContract, isJoker, points, type Contract, type PCard } from "./cards";
-import { contractOf, isFinalContract, type RummyAction, type RummyState } from "./engine";
+import { contractOf, type RummyAction, type RummyState } from "./engine";
 
 /** How useful a card is for this contract, given the rest of the hand (higher = keep). */
 export function usefulness(card: PCard, hand: PCard[], contract: Contract): number {
@@ -49,22 +49,21 @@ export function completes(card: PCard, hand: PCard[], contract: Contract): boole
 export function botTurn(s: RummyState, pid: string): RummyAction[] {
   const me = s.players.find((p) => p.id === pid)!;
   const contract = contractOf(s);
-  const final = isFinalContract(contract);
   if (s.stage === "draw") {
     const top = s.discard[s.discard.length - 1];
     const wantTop = top && !me.down && completes(top, me.hand, contract);
-    const fitsTable = top && me.down && !final && s.melds.some((m) => canAdd(m, [top]));
+    const fitsTable = top && me.down && s.melds.some((m) => canAdd(m, [top]));
     return [{ t: "draw", from: wantTop || fitsTable ? "discard" : "stock" }];
   }
 
   const moves: RummyAction[] = [];
   let hand = [...me.hand];
   if (!me.down) {
-    // Final round: only if the whole hand works. Otherwise lay down the contract,
+    // Go out at once if the whole hand works. Otherwise lay down the contract,
     // keeping at least one card back to discard.
     const all = findContract(hand, contract, true);
     if (all) return [{ t: "layDown", cardIds: hand.map((c) => c.id) }];
-    if (!final) {
+    {
       const melds = findContract(hand, contract, false);
       if (melds) {
         const ids = melds.flatMap((m) => m.cards.map((c) => c.id));
@@ -86,7 +85,7 @@ export function botTurn(s: RummyState, pid: string): RummyAction[] {
         }
       }
     }
-  } else if (!final) {
+  } else {
     // Already down: shed cards onto any group that takes them. Going out by hitting is fine.
     const melds = s.melds.map((m) => ({ ...m, cards: [...m.cards] }));
     for (const card of [...hand]) {

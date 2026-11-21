@@ -105,7 +105,7 @@ The traditional seven-contract rummy (the public-domain family that games like P
 | 4 | 3 sets of 3 | 10 |
 | 5 | 2 sets of 3 + 1 run of 4 | 12 |
 | 6 | 1 set of 3 + 2 runs of 4 | 12 |
-| 7 | 3 runs of 4: lay down your **whole hand at once**, no discard | 12 |
+| 7 | 3 runs of 4 | 12 |
 
 - **Set:** 3+ cards of the same rank. **Run:** 4+ cards in a row of one suit. Aces can be low (A-2-3-4) or high (J-Q-K-A), but runs don't wrap around.
 - **Jokers** are wild, but no group can have more jokers than real cards.
@@ -120,10 +120,10 @@ The traditional seven-contract rummy (the public-domain family that games like P
   - **Lay down:** the button lights up ✓ as soon as your selection makes the contract. You don't have to arrange the groups; the game works out the sets and runs.
   - **Add to a group:** pick a group from the cards that fit.
   - **Discard:** select one card.
-  - **Arrange your hand:** sort by **Rank** or **Suit**, or drag cards wherever you like (**My order**). **🂠 Fan** shows the hand fanned and overlapping like real cards; **▦ Grid** lays them out flat.
+  - **Arrange your hand:** sort by **Rank** or **Suit**, or **Rows**: one row per suit (clubs, diamonds, spades, hearts) running ace to king, with each rank in its own column so matching cards line up top to bottom (cards overlap a little when the hand is big). Or drag cards wherever you like (**Free**). **🂠 Fan** shows the hand fanned and overlapping like real cards; **▦ Grid** lays them out flat.
   - **👀 Table:** everyone's groups, the discard and card counts, big enough to read on the phone.
 - **Host settings:** Classic (7 contracts) or Short (4: 2 sets → set + run → 2 runs → 3 runs), "May I?" on or off, **Lay down in parts** (off by default), and **Cards on the TV** (Normal, Big or Huge; also in ⚙︎ mid-game). If that many groups won't fit, the TV shrinks the cards until they do.
-- **Lay down in parts** (house rule): put down one piece of the contract now (say, one of your two sets) and the rest on a later turn. You can't add to other groups until your whole contract is down, and the last round (3 runs) still goes down all at once.
+- **Lay down in parts** (house rule): put down one piece of the contract now (say, one of your two sets) and the rest on a later turn. You can't add to other groups until your whole contract is down. This works in every round, the last one included.
 - **Bots** collect toward the contract, only take discards that complete something, lay down as soon as they can, add to groups, and sometimes shout "May I?".
 
 ## Euchre
