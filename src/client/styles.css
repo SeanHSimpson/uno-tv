@@ -384,7 +384,8 @@ button {
 .panel input:focus {
   border-color: var(--amber);
 }
-#code {
+#code,
+.code-input {
   letter-spacing: 0.35em;
   text-transform: uppercase;
   font-family: var(--font-display);
@@ -4364,4 +4365,28 @@ body.theme-mi .ph-results {
   font-weight: 700;
   opacity: 0.75;
   line-height: 1.1;
+}
+
+/* Home: watch a table that's already going (from another screen) */
+.or-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.or-line::before,
+.or-line::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 246, 230, 0.2);
+}
+.watch-form {
+  display: grid;
+  gap: 10px;
+}
+.panel p.small {
+  font-size: 0.85rem;
 }

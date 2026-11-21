@@ -6,6 +6,7 @@ Cozy party games for one TV and a room full of phones. **The TV is the table; ev
 - Everyone scans the QR code (or types the 4-letter code) on their phone and picks a name and a picture.
 - The first person to join is the **host**. They pick a game on their phone and start it (or press **Start / Enter** on the TV).
 - When a game ends, the host picks the next one. **Everyone stays in the same room**, so nobody has to rejoin.
+- **Playing from somewhere else:** open the site on your own computer or TV, type the room code under **Watch table**, and the same live table shows there. Then join on your phone with that code like everyone else. Any number of screens can show one table (each plays its own music), and every screen can start the game or deal, same as the main TV.
 
 | Game | Players | In one line |
 | --- | --- | --- |
