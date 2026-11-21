@@ -15,14 +15,13 @@ export interface SelectionHint {
 export function selectionHint(
   selected: PCard[],
   contract: Contract,
-  opts: { final: boolean; handSize: number; parts?: boolean; started?: boolean },
+  opts: { parts?: boolean; started?: boolean } = {},
 ): SelectionHint | null {
   if (!selected.length) return null;
   const need = contractLabel(contract);
 
   // The whole contract?
   if (findContract(selected, contract, true)) {
-    if (opts.final && selected.length < opts.handSize) return { ok: false, text: `✓ That makes ${need}, but in the last round you must lay down your whole hand at once.` };
     return { ok: true, text: opts.started ? `✓ That's the rest of your contract: ${need}. Tap Lay down!` : `✓ That's the contract: ${need}. Tap Lay down!` };
   }
   if (opts.parts) {

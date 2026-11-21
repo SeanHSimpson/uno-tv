@@ -4338,3 +4338,14 @@ body.theme-mi .ph-results {
 .rummy-tv .rm-boards {
   padding: 0.4vmin 0.4vmin 0.8vmin;
 }
+
+/* Rummy "Rows": a suit per row, ranks lined up in columns; cards overlap when space is short. */
+.hand.rows {
+  grid-template-columns: var(--fan-cols);
+  grid-template-rows: var(--fan-rows, auto);
+  gap: 0;
+}
+.hand.rows > .pcard {
+  justify-self: start;
+  align-self: start;
+}

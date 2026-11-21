@@ -126,11 +126,23 @@ describe("turns", () => {
     expect(() => E.layDown(s, "p0", s.players[0]!.hand.slice(0, 6).map((x) => x.id))).toThrow(/don't make 2 sets of 3/);
   });
 
-  it("the last contract (3 runs) needs your whole hand at once", () => {
-    const s = table([[c(1, "H"), c(2, "H"), c(3, "H"), c(4, "H"), c(5, "S"), c(6, "S"), c(7, "S"), c(8, "S"), c(9, "D"), c(10, "D"), c(11, "D"), c(12, "D"), c(13, "D")], [c(3)]], { round: 7 });
-    expect(() => E.layDown(s, "p0", s.players[0]!.hand.slice(0, 12).map((x) => x.id))).toThrow(/whole hand/);
-    const ev = E.layDown(s, "p0", s.players[0]!.hand.map((x) => x.id));
+  it("the last contract (3 runs) plays like any other: lay down, then discard to go out", () => {
+    // Three runs of 4 plus a card that fits none of them (what happened at the table).
+    const s = table([[c(1, "H"), c(2, "H"), c(3, "H"), c(4, "H"), c(5, "S"), c(6, "S"), c(7, "S"), c(8, "S"), c(9, "D"), c(10, "D"), c(11, "D"), c(12, "D"), c(3, "C")], [c(3)]], { round: 7 });
+    // Everything including the odd card: not three runs.
+    expect(() => E.layDown(s, "p0", s.players[0]!.hand.map((x) => x.id))).toThrow(/don't make 3 runs/);
+    E.layDown(s, "p0", s.players[0]!.hand.slice(0, 12).map((x) => x.id));
+    expect(s.players[0]!.down).toBe(true);
+    const ev = E.discard(s, "p0", s.players[0]!.hand[0]!.id);
     expect(ev.at(-1)).toMatchObject({ type: "gameOver" });
+  });
+
+  it("the last round allows adding to groups once you're down", () => {
+    const s = table([[1, 2, 3, 4].map((r) => c(r, "H")).concat([5, 6, 7, 8].map((r) => c(r, "S")), [9, 10, 11, 12].map((r) => c(r, "D")), [c(9, "S"), c(2, "C")]), [c(3)]], { round: 7 });
+    E.layDown(s, "p0", s.players[0]!.hand.slice(0, 12).map((x) => x.id));
+    const spades = s.melds.find((m) => m.cards.some((x) => x.suit === "S"))!;
+    E.hit(s, "p0", [s.players[0]!.hand.find((x) => x.rank === 9)!.id], spades.id);
+    expect(spades.cards).toHaveLength(5);
   });
 
   it("house rule: lay the contract down in parts", () => {
@@ -158,11 +170,13 @@ describe("turns", () => {
     expect(() => E.layDown(s, "p0", [s.players[0]!.hand[0]!.id])).toThrow(/already down/);
   });
 
-  it("laying down in parts never applies to the last round", () => {
-    const s = table([[1, 2, 3, 4, 5, 6, 7, 8].map((r) => c(r, "S")).concat([c(9, "D"), c(10, "D"), c(11, "D"), c(12, "D")]), [c(3)]], { round: 7 });
+  it("laying down in parts works in the last round too", () => {
+    const s = table([[1, 2, 3, 4, 5, 6, 7, 8].map((r) => c(r, "S")).concat([c(9, "D"), c(10, "D"), c(11, "D"), c(12, "D"), c(2, "C")]), [c(3)]], { round: 7 });
     s.settings.parts = true;
-    expect(E.canLayParts(s)).toBe(false);
-    expect(() => E.layDown(s, "p0", s.players[0]!.hand.slice(0, 4).map((x) => x.id))).toThrow(/whole hand/);
+    expect(E.canLayParts(s)).toBe(true);
+    E.layDown(s, "p0", s.players[0]!.hand.slice(0, 4).map((x) => x.id));
+    expect(s.players[0]!.laid).toEqual({ sets: 0, runs: 1 });
+    expect(s.players[0]!.down).toBe(false);
   });
 
   it("the host can resize the TV cards any time", () => {
@@ -266,7 +280,7 @@ describe("selection hint", () => {
     const { selectionHint } = await import("../src/shared/games/rummy/hint");
     const D = (r: number) => c(r, "D");
     const run = [7, 8, 9, 10].map(D);
-    const opts = { final: false, handSize: 11 };
+    const opts = {};
     // Round 1 (2 sets): a run doesn't count.
     expect(selectionHint(run, { sets: 2, runs: 0 }, opts)?.text).toMatch(/needs sets only/);
     // Round 2 (set + run): the run is half of it.
@@ -285,8 +299,8 @@ describe("selection hint", () => {
     expect(selectionHint(set, { sets: 1, runs: 0 }, { ...opts, parts: true, started: true })?.text).toMatch(/rest of your contract/);
     // Nothing selected: no hint.
     expect(selectionHint([], { sets: 2, runs: 0 }, opts)).toBeNull();
-    // Last round needs the whole hand.
+    // Last round: three runs is just the contract, like any other round.
     const three = [...[1, 2, 3, 4].map((r) => c(r, "S")), ...[5, 6, 7, 8].map((r) => c(r, "H")), ...[9, 10, 11, 12].map((r) => c(r, "C"))];
-    expect(selectionHint(three, { sets: 0, runs: 3 }, { final: true, handSize: 13 })?.text).toMatch(/whole hand/);
+    expect(selectionHint(three, { sets: 0, runs: 3 }, opts)?.ok).toBe(true);
   });
 });
