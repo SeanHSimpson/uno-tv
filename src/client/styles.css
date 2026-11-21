@@ -1326,11 +1326,14 @@ kbd {
   border-radius: 999px;
   pointer-events: none;
 }
+.hand-card.just-drew {
+  filter: drop-shadow(0 0 3px var(--good)) drop-shadow(0 0 2px var(--good));
+}
 .hand-card.just-drew::before {
   content: "New";
   position: absolute;
-  right: -4px;
-  top: -6px;
+  left: -3px;
+  top: -9px;
   z-index: 3;
   background: var(--good);
   color: var(--ink);
@@ -4389,4 +4392,23 @@ body.theme-mi .ph-results {
 }
 .panel p.small {
   font-size: 0.85rem;
+}
+
+/* Euchre phone: the turned-up card sits in the bidding panel (the table lives on the TV) */
+.eu-bid-up {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.eu-bid-up small,
+.eu-bid-note {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin: 0 0 6px;
+  text-align: center;
+}
+.eu-bid-card {
+  --cw: 62px;
 }

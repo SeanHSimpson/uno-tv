@@ -41,6 +41,7 @@ Match the top card by **color** or **symbol**, or play a **Wild**. The first per
 
 - **Swipe a card up** toward the TV to play it. The card glows once you've swiped far enough, and snaps back if you let go early.
 - **Arrange your hand:** **Color** (by color, then number), **Number** (all your 7s together, all your skips…), or drag a card **sideways** to put it anywhere you like (**Free**). Dragging up still plays the card: the first direction you move decides.
+- **New cards:** anything that lands in your hand after the deal (a draw, a +2, a penalty) says **New** for 20 seconds.
 - Or **tap a card** to raise it, then **tap it again** to play.
 - On Android your phone vibrates when it's your turn. iPhones don't let websites vibrate, so you get a chime and a big "Your turn!" flash instead.
 
@@ -111,7 +112,7 @@ The traditional seven-contract rummy (the public-domain family that games like P
 | 7 | 3 runs of 4 | 12 |
 
 - **Set:** 3+ cards of the same rank. **Run:** 4+ cards in a row of one suit. Aces can be low (A-2-3-4) or high (J-Q-K-A), but runs don't wrap around.
-- **Jokers** are wild, but no group can have more jokers than real cards.
+- **Jokers** (midnight blue with a gold jester's cap, and JOKER down the corner so you can spot one in a squeezed hand) are wild, but no group can have more jokers than real cards.
 - **Your turn:**
   1. Draw from the deck, or take the top discard.
   2. Lay down your contract (once per round). Groups can be longer than the minimum.
@@ -125,8 +126,10 @@ The traditional seven-contract rummy (the public-domain family that games like P
   - **Discard:** select one card.
   - **Arrange your hand:** **Rank** piles up matching cards (A A A, each one peeking out from under the next); tap Rank again for **columns** that cascade down like solitaire. **Suit** stacks each suit in a row, ace to king; tap Suit again for stacked **columns**. Your phone remembers which you like. Or **Rows**: one row per suit (clubs, diamonds, spades, hearts) running ace to king, with each rank in its own column so matching cards line up top to bottom (cards overlap a little when the hand is big). Or drag cards wherever you like (**Free**). In Free, **🂠 Fan** shows the hand fanned and overlapping like real cards; **▦ Grid** lays them out flat.
   - **👀 Table:** everyone's groups, the discard and card counts, big enough to read on the phone.
+  - **New cards:** whatever you just drew (from the deck or the discard pile, or bought with May I) says **New** for 20 seconds.
 - **Host settings:** Classic (7 contracts) or Short (4: 2 sets → set + run → 2 runs → 3 runs), "May I?" on or off, **Lay down in parts** (off by default), and **Cards on the TV** (Normal, Big or Huge; also in ⚙︎ mid-game). If that many groups won't fit, the TV shrinks the cards until they do.
 - **Lay down in parts** (house rule): put down one piece of the contract now (say, one of your two sets) and the rest on a later turn. You can't add to other groups until your whole contract is down. This works in every round, the last one included.
+- **On the TV**, the deal goes round the table from the deck, and every draw, discard and group flies from that player's spot.
 - **Bots** collect toward the contract, only take discards that complete something, lay down as soon as they can, add to groups, and sometimes shout "May I?".
 
 ## Euchre
@@ -141,7 +144,8 @@ The classic four-player partnership game, dressed up north: a cedar table on a n
 - **Trump order:** Right bower (Jack of trump), Left bower (the other Jack of the same colour, which counts as trump), A, K, Q, 10, 9. Follow the suit led if you can; your phone only lets you play legal cards.
 - **Scoring:** the makers take 3–4 tricks for **1**, all 5 for **2** (**4** alone). Fewer than 3 and they're **euchred**: the defenders get **2**. First to **10** (or 5 for a quick game) wins.
 - Hands deal themselves after a short summary. If someone leaves mid-game, a bot keeps their seat warm. The host can also let a bot make a stuck player's move.
-- **On your phone:** **Suit** stacks your cards by suit (trump first), **Rank** piles them by rank (aces first); tap either again to switch between rows/piles and columns. Or drag them into your own order (**Free**) and fan them like a real hand. **👀 Table** shows the trick in progress at a readable size, the last trick and who took it, and the score.
+- **On your phone:** **Suit** stacks your cards by suit (trump first), **Rank** piles them by rank (aces first); tap either again to switch between rows/piles and columns. Or drag them into your own order (**Free**) and fan them like a real hand. The table itself is on the TV, so your phone is all hand; **👀 Peek at table** shows the trick in progress, the last trick and who took it, and the score. When it's your call, the turned-up card shows right above the bidding buttons. If you're the dealer and pick it up, it says **New** for 20 seconds.
+- **On the TV**, the deal goes out three-then-two from the middle of the table, and each card played flies in from that player's seat.
 - **Cards on the TV:** Normal, Big (default) or Huge, in the lobby settings or ⚙︎ mid-game.
 
 ## Fizzle!

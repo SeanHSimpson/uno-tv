@@ -46,15 +46,31 @@ function center(card: PCard) {
     <g transform="translate(0 28) scale(1.3)" fill="${col}">${SUIT_PATH[card.suit!]}</g>`;
 }
 
+const NAVY = "#1e2a4a";
+const GOLD = "#e8a93a";
+const GOLD_LIGHT = "#f3d48a";
+
+/** JOKER stacked down the corner like a real deck's index, so it reads even when squeezed into a pile. */
+const jokerIndex = (x: number, y: number, rot: number) =>
+  `<g transform="translate(${x} ${y}) rotate(${rot})">${[..."JOKER"]
+    .map((ch, i) => `<text text-anchor="middle" y="${i * 14}" font-family="Fredoka, system-ui, sans-serif" font-weight="700" font-size="13" fill="${GOLD}">${ch}</text>`)
+    .join("")}</g>`;
+
+/** Midnight gold: deep navy with a gold stitched border and a gold jester's cap. */
 function jokerSvg() {
-  const petal = (rot: number, color: string) => `<ellipse cx="0" cy="-12" rx="9" ry="13" fill="${color}" stroke="${CREAM}" stroke-width="2" transform="rotate(${rot})"/>`;
   return `<svg class="card-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Joker">
-    <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="14" fill="${CREAM}"/>
-    <rect x="6" y="6" width="${W - 12}" height="${H - 12}" rx="10" fill="#3b2f48"/>
-    <rect x="12" y="12" width="${W - 24}" height="${H - 24}" rx="7" fill="none" stroke="${CREAM}" stroke-opacity=".6" stroke-width="1.6" stroke-dasharray="4 3"/>
-    <g transform="translate(${W / 2} ${H / 2 - 6})">${petal(-45, "#ef6a4f")}${petal(45, "#f8c14a")}${petal(135, "#62b36e")}${petal(225, "#5a98dd")}<circle r="6" fill="${CREAM}"/></g>
-    <text x="${W / 2}" y="${H - 26}" text-anchor="middle" font-family="Fredoka, system-ui, sans-serif" font-weight="700" font-size="17" letter-spacing="2" fill="${CREAM}">JOKER</text>
-    <text x="22" y="34" text-anchor="middle" font-family="Fredoka, system-ui, sans-serif" font-weight="700" font-size="18" fill="${CREAM}">★</text>
+    <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="14" fill="${NAVY}" stroke="#c9952f" stroke-width="2"/>
+    <rect x="1" y="1" width="${W - 2}" height="${(H - 2) / 2}" rx="14" fill="#fff" fill-opacity=".06"/>
+    <rect x="10" y="10" width="${W - 20}" height="${H - 20}" rx="8" fill="none" stroke="${GOLD}" stroke-opacity=".8" stroke-width="1.6" stroke-dasharray="4 3"/>
+    <g transform="translate(${W / 2} ${H / 2 + 10}) scale(.72)">
+      <path d="M-26 10C-28-8-38-20-44-30-30-27-17-17-8 8Z" fill="${GOLD}"/>
+      <path d="M-11 8C-10-14-5-30 0-44 5-30 10-14 11 8Z" fill="${GOLD_LIGHT}"/>
+      <path d="M26 10C28-8 38-20 44-30 30-27 17-17 8 8Z" fill="${GOLD}"/>
+      <rect x="-30" y="6" width="60" height="14" rx="7" fill="${GOLD}"/>
+      <g fill="${CREAM}" stroke="${CREAM}" stroke-width="1.5"><circle cx="-44" cy="-31" r="5"/><circle cx="0" cy="-45" r="5"/><circle cx="44" cy="-31" r="5"/></g>
+      <g fill="${NAVY}" fill-opacity=".9"><circle cx="-18" cy="13" r="2.4"/><circle cx="0" cy="13" r="2.4"/><circle cx="18" cy="13" r="2.4"/></g>
+    </g>
+    ${jokerIndex(20, 28, 0)}${jokerIndex(W - 20, H - 28, 180)}
   </svg>`;
 }
 

@@ -1,4 +1,4 @@
-// Euchre on a phone: your five cards, a little table showing the trick so far, and the
+// Euchre on a phone: your five cards (the table itself is on the TV; peek at it any time), and the
 // bidding buttons (order up / pass / name a suit / go alone) when it's your call.
 
 import type { ECard, EuchreEvent, EuchrePrivate, EuchrePublic, Suit } from "../../../shared/games/euchre/engine";
@@ -10,6 +10,7 @@ import { $, avatar, esc, toast } from "../../ui";
 import { tableSizeMenu } from "../tableSize";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
 import { ecardEl, ecardHtml, suitIcon } from "./cards";
+import { NewCards } from "../../newCards";
 
 export function euchrePhone(ctx: PhoneCtx): GameView {
   const pid = ctx.pid;
@@ -25,6 +26,8 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
   const trumpNow = () => state?.trump ?? null;
   // "Suit": trump first (bowers on top), then the other suits. "Rank": aces down to nines.
   const suitKey = (c: ECard) => (effSuit(c, trumpNow()) === trumpNow() ? 0 : 1 + SUITS.indexOf(c.suit));
+  // The turned-up card, when you're the dealer and pick it up, wears a "New" badge for a while.
+  const fresh = new NewCards(() => me && renderHand(me));
   const arranger = new HandArranger<ECard>(
     "euchre",
     {
@@ -38,7 +41,6 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
   ctx.el.innerHTML = `
   <div class="euchre-phone">
     <section class="eu-ph-status" id="eu-status"></section>
-    <section class="eu-ph-table" id="eu-table"></section>
     <section class="eu-ph-bid" id="eu-bid" hidden></section>
     <section class="hand-toolbar" id="eu-tools"></section>
     <main class="hand eu-hand" id="eu-hand" aria-label="Your cards"></main>
@@ -129,6 +131,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
   function update(snap: GameSnap<EuchrePublic, EuchrePrivate>) {
     state = snap.pub;
     me = snap.me;
+    if (me) fresh.update(me.hand.map((c) => c.id));
     isHost = snap.room.hostId === pid;
     if (me && selected !== null && !me.hand.some((c) => c.id === selected)) selected = null;
     if (me?.myTurn && !wasMyTurn) {
@@ -161,7 +164,6 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
       return;
     }
     renderStatus(s, m);
-    renderTable(s, m);
     renderBid(s, m);
     renderHand(m);
     const btn = $("#eu-act") as HTMLButtonElement;
@@ -216,28 +218,6 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     return ours ? `<b>We got ${r.points}!</b> ${r.tricks} tricks${r.alone && r.tricks === 5 ? ", alone!" : ""}` : `They took ${r.tricks} tricks: +${r.points} for them.`;
   }
 
-  /** A tiny table: partner across, opponents either side, you at the bottom. */
-  function renderTable(s: EuchrePublic, m: EuchrePrivate) {
-    const el = $("#eu-table");
-    const mySeat = Math.max(0, s.players.findIndex((p) => p.id === pid));
-    const spots = ["me", "left", "across", "right"];
-    const slot = (k: number) => {
-      const p = s.players[(mySeat + k) % 4]!;
-      const t = s.trick.find((x) => x.pid === p.id);
-      const win = s.trickWinner === p.id;
-      const turn = s.turnId === p.id;
-      return `<div class="eu-ph-spot ${spots[k]} ${win ? "win" : ""} ${turn ? "turn" : ""} ${s.outId === p.id ? "out" : ""}">
-        ${t ? ecardHtml(t.card, "eu-ph-card") : `<div class="eu-ph-empty">${s.outId === p.id ? "out" : ""}</div>`}
-        <span>${k === 0 ? "You" : esc(p.name)}${s.dealerId === p.id ? " · D" : ""}</span>
-      </div>`;
-    };
-    let mid = "";
-    if (s.phase === "bid1" && s.upcard) mid = `<div class="eu-ph-up">${ecardHtml(s.upcard, "eu-ph-card")}<small>Turned up</small></div>`;
-    else if (s.phase === "bid2") mid = `<div class="eu-ph-up"><small>${SUIT_NAMES[s.turnedDown!]}<br>turned down</small></div>`;
-    el.hidden = !m.seated && s.phase !== "play";
-    el.innerHTML = `${[2, 1, 3, 0].map(slot).join("")}<div class="eu-ph-mid">${mid}</div>`;
-  }
-
   function renderBid(s: EuchrePublic, m: EuchrePrivate) {
     const el = $("#eu-bid");
     const show = m.myTurn && (m.canOrder || m.canCall.length > 0);
@@ -246,12 +226,13 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     const aloneBtn = `<button class="btn btn-ghost eu-alone ${alone ? "on" : ""}" data-bid="alone" aria-pressed="${alone}">${alone ? "✓ Going alone" : "Go alone?"}</button>`;
     if (m.canOrder) {
       const up = s.upcard!;
-      el.innerHTML = `<div class="eu-bid-row">
+      el.innerHTML = `<div class="eu-bid-up">${ecardHtml(up, "eu-bid-card")}<small>Turned up</small></div>
+        <div class="eu-bid-row">
           <button class="btn btn-primary btn-xl" data-bid="order">${m.dealer ? "Pick it up" : "Order it up"} ${suitIcon(up.suit, 22, "currentColor")}</button>
           <button class="btn btn-ghost btn-xl" data-bid="pass">Pass</button>
         </div>${aloneBtn}`;
     } else {
-      el.innerHTML = `<div class="eu-suits">${m.canCall
+      el.innerHTML = `<p class="eu-bid-note">${SUIT_NAMES[s.turnedDown!]} was turned down</p><div class="eu-suits">${m.canCall
         .map((x) => `<button class="btn eu-suit s-${x}" data-bid="${x}">${suitIcon(x, 30, "currentColor")}<span>${SUIT_NAMES[x]}</span></button>`)
         .join("")}</div>
         <div class="eu-bid-row">${aloneBtn}${m.canPass ? `<button class="btn btn-ghost" data-bid="pass">Pass</button>` : ""}</div>`;
@@ -333,7 +314,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
   }
 
   function renderHand(m: EuchrePrivate) {
-    $("#eu-tools").innerHTML = arranger.toolbar({ glance: "👀 Table" });
+    $("#eu-tools").innerHTML = arranger.toolbar({ glance: "👀 Peek at table" });
     // Don't yank the cards out from under a finger that's on one (maybe starting a drag).
     if (reorder.holding()) {
       reorder.later(() => me && renderHand(me));
@@ -344,6 +325,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
         const el = ecardEl(c, "hand-card");
         const usable = m.myTurn && (m.canDiscard || m.legal.includes(c.id));
         el.classList.toggle("selected", selected === c.id);
+        el.classList.toggle("just-drew", fresh.isNew(c.id));
         el.classList.toggle("playable", usable && selected !== c.id);
         el.classList.toggle("dim", m.myTurn && state?.phase === "play" && !usable);
         el.classList.toggle("trump", !!state?.trump && isTrump(c.suit, c.rank, state.trump));
@@ -417,6 +399,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
       return nudge + tableSizeMenu(s.table, [1, 1.3, 1.55]);
     },
     destroy() {
+      fresh.stop();
       ac.abort();
       document.body.classList.remove("my-turn", "theme-mi");
       ctx.el.innerHTML = "";

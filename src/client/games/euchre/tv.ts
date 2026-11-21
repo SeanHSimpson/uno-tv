@@ -6,9 +6,9 @@ import type { EuchreEvent, EuchrePublic } from "../../../shared/games/euchre/eng
 import { shortCard, SUIT_NAMES, TEAM_EMOJI, TEAM_NAMES } from "../../../shared/games/euchre/engine";
 import { audio } from "../../audio";
 import { confetti } from "../../fx";
-import { $, avatar, esc, reducedMotion } from "../../ui";
+import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
-import { ecardHtml, suitIcon } from "./cards";
+import { ecardEl, ecardHtml, suitIcon } from "./cards";
 
 /** Seat 0 sits at the bottom, then clockwise: left, top, right. */
 const POS = ["bottom", "left", "top", "right"] as const;
@@ -202,11 +202,17 @@ export function euchreTv(ctx: TvCtx): GameView {
     if (reducedMotion()) return;
     for (const t of s.trick) {
       if (before.has(t.card.id)) continue;
-      const pos = POS[seatIndex(t.pid)] ?? "bottom";
-      const [dx, dy] = DIR[pos];
-      el.querySelector(`[data-card="${t.card.id}"]`)?.animate(
-        [{ translate: `${dx * 30}vmin ${dy * 26}vmin`, rotate: `${dx * 25}deg`, opacity: 0.3 }, { translate: "0 0", rotate: "0deg", opacity: 1 }],
-        { duration: 380, easing: "cubic-bezier(.2,.8,.25,1)" },
+      // The card flies from the player's seat into their spot in front of them.
+      const slot = el.querySelector<HTMLElement>(`[data-card="${t.card.id}"]`);
+      const seat = document.getElementById(`eu-seat-${seatIndex(t.pid)}`)?.getBoundingClientRect();
+      if (!slot || !seat) continue;
+      const to = slot.getBoundingClientRect();
+      const dx = seat.left + seat.width / 2 - (to.left + to.width / 2);
+      const dy = seat.top + seat.height / 2 - (to.top + to.height / 2);
+      const spin = ((t.card.id * 47) % 50) - 25;
+      slot.animate(
+        [{ translate: `${dx}px ${dy}px`, rotate: `${spin}deg`, scale: 0.7, opacity: 0.4 }, { opacity: 1, offset: 0.25 }, { translate: "0 0", rotate: "0deg", scale: 1, opacity: 1 }],
+        { duration: 520, easing: "cubic-bezier(.2,.8,.25,1)" },
       );
     }
   }
@@ -265,12 +271,35 @@ export function euchreTv(ctx: TvCtx): GameView {
     setTimeout(() => b.remove(), 2000);
   }
 
+  /** The deal, the way it's done at the cabin: three then two, round the table from the dealer's left. */
+  function dealAnimation(dealer: string) {
+    const ps = state?.players ?? [];
+    const center = $("#eu-center").getBoundingClientRect();
+    const w = Math.min(innerWidth, innerHeight) * 0.075;
+    const from = new DOMRect(center.left + center.width / 2 - w / 2, center.top + center.height / 2 - w * 0.75, w, w * 1.5);
+    const d = ps.findIndex((p) => p.id === dealer);
+    let n = 0;
+    for (const batch of [[3, 2, 3, 2], [2, 3, 2, 3]])
+      for (let j = 1; j <= 4; j++) {
+        const seat = (d + j) % 4;
+        if (state?.outId && ps[seat]?.id === state.outId) continue;
+        const r = document.getElementById(`eu-seat-${seat}`)?.getBoundingClientRect();
+        if (!r) continue;
+        const to = new DOMRect(r.left + r.width / 2 - w * 0.4, r.top + r.height / 2 - w * 0.6, w * 0.8, w * 1.2);
+        for (let k = 0; k < batch[j - 1]!; k++) fly(ecardEl(null), from, to, { delay: n * 140 + k * 45, duration: 420, spin: (j % 2 ? 1 : -1) * 25 });
+        n++;
+      }
+    // The turned-up card flips over last.
+    document.querySelector("#eu-center .eu-upcard")?.animate([{ scale: "0 1", opacity: 0 }, { scale: "0 1", opacity: 0, offset: 0.01 }, { scale: "1 1", opacity: 1 }], { duration: 300, delay: n * 140 + 100, fill: "backwards" });
+  }
+
   function react(events: EuchreEvent[]) {
     const log: string[] = [];
     for (const e of events) {
       switch (e.type) {
         case "deal":
           audio.shuffle();
+          if (!reducedMotion()) dealAnimation(e.dealer);
           log.push(`Hand ${e.hand}: ${name(e.dealer)} deals and turns up the ${shortCard(e.upcard)}`);
           break;
         case "pass":

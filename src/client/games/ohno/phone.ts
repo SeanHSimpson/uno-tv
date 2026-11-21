@@ -7,6 +7,7 @@ import { attachReorder, HandArranger, type SortMode } from "../../handArrange";
 import { confetti } from "../../fx";
 import { $, avatar, esc, fly, reducedMotion, toast } from "../../ui";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
+import { NewCards } from "../../newCards";
 
 export function ohnoPhone(ctx: PhoneCtx): GameView {
   const pid = ctx.pid;
@@ -39,6 +40,8 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
   let selected: number | null = null;
   let wildPending: number | null = null;
   let prevHandIds = new Set<number>();
+  // Cards that just came into your hand (a draw, a penalty) wear a "New" badge for a while.
+  const newCards = new NewCards(() => state && me && renderHand());
   let wasMyTurn = false;
   // Color (today's sort), Number, or Free (drag cards sideways to arrange them yourself).
   const arranger = new HandArranger<Card>(
@@ -55,6 +58,7 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
     me = snap.me;
     isHost = snap.room.hostId === pid;
     if (!me) return;
+    newCards.update(me.hand.map((c) => c.id));
     if (selected !== null && !me.playable.includes(selected)) selected = null;
     const myTurn = state.turnId === pid;
     if (myTurn && !wasMyTurn && !snap.first) {
@@ -296,7 +300,7 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
         el.classList.toggle("playable", myTurn && playable);
         el.classList.toggle("dim", myTurn && !playable);
         el.classList.toggle("selected", selected === card.id);
-        el.classList.toggle("just-drew", m.drawnCardId === card.id);
+        el.classList.toggle("just-drew", m.drawnCardId === card.id || newCards.isNew(card.id));
         el.setAttribute("role", "button");
         el.setAttribute("aria-label", `${shortLabel(card)}${playable ? ", playable" : ""}`);
         el.dataset.hint = selected === card.id ? (card.color === "wild" ? "Tap to pick color" : "Tap or swipe up") : "";
@@ -417,6 +421,7 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
     },
     onError: resetSwipedCards,
     destroy() {
+      newCards.stop();
       ac.abort();
       document.body.classList.remove("my-turn");
       ctx.el.innerHTML = "";
