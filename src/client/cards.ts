@@ -154,11 +154,13 @@ export function cardEl(card: Card | null, extraClass = ""): HTMLDivElement {
 
 const COLOR_ORDER: CardColor[] = ["red", "yellow", "green", "blue", "wild"];
 const VALUE_ORDER = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "skip", "reverse", "draw2", "wild", "wild4"];
+/** OhNo! "Color": by color, then number. */
+export const byColor = (a: Card, b: Card) =>
+  COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color) || VALUE_ORDER.indexOf(a.value) - VALUE_ORDER.indexOf(b.value) || a.id - b.id;
+/** OhNo! "Number": matching numbers (or skips, reverses…) together, then by color. */
+export const byNumber = (a: Card, b: Card) =>
+  VALUE_ORDER.indexOf(a.value) - VALUE_ORDER.indexOf(b.value) || COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color) || a.id - b.id;
+
 export function sortHand(hand: Card[]): Card[] {
-  return [...hand].sort(
-    (a, b) =>
-      COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color) ||
-      VALUE_ORDER.indexOf(a.value) - VALUE_ORDER.indexOf(b.value) ||
-      a.id - b.id,
-  );
+  return [...hand].sort(byColor);
 }

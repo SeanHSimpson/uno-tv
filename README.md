@@ -40,6 +40,7 @@ Match the top card by **color** or **symbol**, or play a **Wild**. The first per
 ### Playing cards on your phone
 
 - **Swipe a card up** toward the TV to play it. The card glows once you've swiped far enough, and snaps back if you let go early.
+- **Arrange your hand:** **Color** (by color, then number), **Number** (all your 7s together, all your skips…), or drag a card **sideways** to put it anywhere you like (**Free**). Dragging up still plays the card: the first direction you move decides.
 - Or **tap a card** to raise it, then **tap it again** to play.
 - On Android your phone vibrates when it's your turn. iPhones don't let websites vibrate, so you get a chime and a big "Your turn!" flash instead.
 
@@ -50,7 +51,7 @@ The TV plays the music; phones play small sounds for their own player (the turn 
 | When | Music |
 | --- | --- |
 | Lobby & between rounds (rotates) | Chopin's *Nocturne Op. 9 No. 2*, Debussy's *Clair de Lune*, Beethoven's *Für Elise*, Satie's *Gymnopédie No. 1*, Pachelbel's *Canon in D* |
-| During play (rotates) | Joplin's *The Entertainer* and *Maple Leaf Rag*, Mozart's *Rondo alla Turca* and *Eine kleine Nachtmusik* (1st movement), Sousa's *The Stars and Stripes Forever*, Grieg's *In the Hall of the Mountain King*, Petzold/Bach's *Minuet in G*, and *Korobeiniki* (the Russian folk song that the classic falling-blocks game made famous; the whole tune is only 8 bars, so it's arranged as four verses with harmony, an octave lift and the traditional speed-up) |
+| During play (rotates) | Joplin's *The Entertainer* and *Maple Leaf Rag*, Mozart's *Rondo alla Turca* and *Eine kleine Nachtmusik* (1st movement), Sousa's *The Stars and Stripes Forever* and *The Liberty Bell*, Schubert's *Marche militaire No. 1*, Chopin's *Minute Waltz*, Grieg's *In the Hall of the Mountain King*, Petzold/Bach's *Minuet in G*, and *Korobeiniki* (the Russian folk song that the classic falling-blocks game made famous; the whole tune is only 8 bars, so it's arranged as four verses with harmony, an octave lift and the traditional speed-up) |
 
 Every piece plays complete, start to finish, then the next one in the list comes on. Big orchestral chords are thinned to the melody plus a few accompaniment notes, a limiter keeps loud passages from clipping, and the music is scheduled far enough ahead that a busy screen doesn't make it stutter.
 
@@ -59,7 +60,7 @@ Every piece plays complete, start to finish, then the next one in the list comes
 - **TV:** 🔊 button in the top bar, or press **M** to mute. The host can also turn the TV's music and sound effects on or off from ⚙︎ on their phone, even mid-game. Browsers only allow sound after a click, so if the TV page was refreshed, it shows "Click anywhere for music & sound".
 - **Phones:** 🔊 button in the top corner. On iPhone, the silent switch also mutes web sounds.
 
-All the music is public domain (a few typeset editions are Creative Commons, credited below), played on a synthesized music box. Everything except Korobeiniki was converted from the [Mutopia Project](https://www.mutopiaproject.org)'s free MIDI files into note lists in `src/client/music/`:
+All the music is public domain (a few typeset editions are Creative Commons, credited below), played on a recorded grand piano in a concert-hall echo: the [Salamander Grand Piano](https://github.com/sfzinstruments/SalamanderGrandPiano) by Alexander Holm, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) (30 notes, about 2 MB, in `public/piano/`; the TV downloads them in the background and plays a synthesized music box until they arrive). Everything except Korobeiniki was converted from the [Mutopia Project](https://www.mutopiaproject.org)'s free MIDI files into note lists in `src/client/music/`:
 
 - Chopin, Nocturne Op. 9 No. 2: [Mutopia #1590](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1590), from the G. Schirmer 1881 edition, typeset by Renato Biolcati Rinaldi. CC BY-SA 3.0.
 - Grieg, *In the Hall of the Mountain King* (Grieg's own piano arrangement): [Mutopia #1888](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1888), from The University Society 1918 edition. Public domain.
@@ -70,9 +71,10 @@ All the music is public domain (a few typeset editions are Creative Commons, cre
 - Beethoven, Für Elise, WoO 59 ([#931](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931)). Public domain.
 - Debussy, Clair de Lune ([#1778](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1778)). Public domain.
 - Satie, Gymnopédie No. 1 ([#37](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=37)). Public domain.
+- Sousa, The Liberty Bell March ([Mutopia](https://www.mutopiaproject.org/ftp/SousaJP/TheLibertyBell/)); Schubert, Marche militaire No. 1, D. 733, piano four hands ([Mutopia](https://www.mutopiaproject.org/ftp/SchubertF/D733/SchubertF-D733-1-TroisMarches/)); Chopin, Waltz Op. 64 No. 1, "Minute Waltz" ([Mutopia](https://www.mutopiaproject.org/ftp/ChopinFF/O64/chopin_valse_op64_no1/)). Public domain.
 - Pachelbel, Canon in D, melody line ([#1700](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1700)), from Jim Paterson's edition. CC BY 3.0. The ground bass and its chords are added in `songs.ts`.
 
-Very low notes are lifted an octave or two so a music box can sound them.
+While the music box is standing in for the piano, very low notes are lifted an octave or two so it can sound them.
 
 ### Host controls (⚙︎ on the host's phone)
 

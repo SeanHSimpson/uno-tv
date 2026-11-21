@@ -1,6 +1,7 @@
 // All sound in OhNo! is synthesized live with the Web Audio API: no audio files.
 // The music (complete public-domain pieces) lives in ./songs.ts.
 
+import { PIANO_FILES, PIANO_NOTES, pianoSample } from "./piano";
 import { SONGS, type MusicEvent, type Song } from "./songs";
 
 export { SONGS };
@@ -81,7 +82,19 @@ class AudioEngine {
     this.musicBus = ctx.createGain();
     this.musicBus.gain.value = 0;
     this.musicBus.connect(this.master);
-    this.musicBus.connect(delay);
+    // The music sits in a concert hall: 2.4 s of decaying stereo noise as the room's echo.
+    const len = Math.floor(ctx.sampleRate * 2.4);
+    const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+    }
+    const hall = ctx.createConvolver();
+    hall.buffer = ir;
+    const hallWet = ctx.createGain();
+    hallWet.gain.value = 0.28;
+    this.musicBus.connect(hall).connect(hallWet).connect(this.master);
+    this.loadPiano();
     this.sfxBus = ctx.createGain();
     this.sfxBus.gain.value = 0.9;
     this.sfxBus.connect(this.master);
@@ -180,12 +193,62 @@ class AudioEngine {
   /** When each sounding music note ends, so very busy passages can't pile up hundreds of voices. */
   private voiceEnds: number[] = [];
   private static MAX_VOICES = 28;
+  /** Recorded piano notes are cheap to play, so the piano can ring more of them at once. */
+  private static MAX_PIANO_VOICES = 40;
+
+  // ---------- grand piano ----------
+
+  /** Recorded notes by MIDI number, filled in as they download (about 2 MB in all). */
+  private piano = new Map<number, AudioBuffer>();
+
+  private loadPiano() {
+    const ctx = this.ctx!;
+    PIANO_FILES.forEach((file, i) => {
+      fetch(`/piano/${file}`)
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))))
+        .then((b) => ctx.decodeAudioData(b))
+        .then((buf) => this.piano.set(PIANO_NOTES[i]!, buf))
+        .catch(() => {}); // that note keeps the music box
+    });
+  }
+
+  /** How loud each part sits on the piano (the melody on top). */
+  private static PIANO_LEVEL: Record<string, number> = { lead: 0.7, harmony: 0.37, bass: 0.5 };
+
+  /** Play one note on the recorded piano; how long it rings, or null if that recording hasn't arrived yet. */
+  private pianoNote(ev: MusicEvent, t: number, dur: number): number | null {
+    const s = pianoSample(ev.midi);
+    const buf = this.piano.get(s.sampleMidi);
+    if (!buf) return null;
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = s.rate;
+    const g = ctx.createGain();
+    // The damper comes down a touch after the written length; a short release, like a real key.
+    const hold = Math.min(buf.duration / s.rate - 0.05, Math.max(0.25, dur * 1.05));
+    const release = 0.35;
+    g.gain.setValueAtTime(AudioEngine.PIANO_LEVEL[ev.voice]! * (0.45 + 0.55 * ev.vel), t);
+    g.gain.setTargetAtTime(0, t + hold, release / 3);
+    src.connect(g).connect(this.musicBus);
+    src.start(t);
+    src.stop(t + hold + release + 0.1);
+    return hold + release;
+  }
 
   private playEvent(ev: MusicEvent, t: number, dur: number) {
     this.voiceEnds = this.voiceEnds.filter((e) => e > t);
-    // The tune always plays; accompaniment gives way when too much is already ringing.
+    if (ev.voice !== "shaker" && this.piano.size) {
+      // The tune always plays; accompaniment gives way when too much is already ringing.
+      if (ev.voice !== "lead" && this.voiceEnds.length >= AudioEngine.MAX_PIANO_VOICES) return;
+      const rang = this.pianoNote(ev, t, dur);
+      if (rang !== null) {
+        this.voiceEnds.push(t + rang);
+        return;
+      }
+    }
     if (ev.voice !== "lead" && this.voiceEnds.length >= AudioEngine.MAX_VOICES) return;
-    // Keep the score's dynamics (soft passages stay soft) without letting quiet notes vanish.
+    // Music box (until the piano has loaded). Keep the score's dynamics without letting quiet notes vanish.
     const dyn = 0.6 + 0.4 * ev.vel;
     // A music box can't sound very low notes, so lift anything too deep up by octaves.
     const lift = (m: number, floor: number) => {

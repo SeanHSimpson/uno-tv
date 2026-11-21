@@ -79,3 +79,34 @@ describe("HandArranger piles and stacks", () => {
     expect(a.toolbar()).toMatch(/data-layout/);
   });
 });
+
+describe("HandArranger options (OhNo!)", () => {
+  const ohno = () =>
+    new HandArranger<C>(
+      "ohno-test",
+      { rank: (a, b) => a.rank - b.rank, suit: (a, b) => a.suit - b.suit },
+      { defaultMode: "suit", modes: ["suit", "rank", "free"], labels: { suit: "Color", rank: "Number" } },
+    );
+
+  it("shows its own labels, in its own order", () => {
+    const html = ohno().toolbar({ fan: false });
+    const labels = [...html.matchAll(/data-sort="(\w+)"/g)].map((m) => m[1]);
+    expect(labels).toEqual(["suit", "rank", "free"]);
+    expect(html).toMatch(/>Color</);
+    expect(html).toMatch(/>Number</);
+  });
+
+  it("can leave out the Fan button even in Free", () => {
+    const a = ohno();
+    a.setMode("free");
+    expect(a.toolbar({ fan: false })).not.toMatch(/data-layout/);
+  });
+
+  it("without groups, Color/Number are plain sorts", () => {
+    const a = ohno();
+    expect(a.arrange(cards).map((c) => c.id)).toEqual([2, 3, 1, 4, 5]);
+    expect(a.piles).toBeNull();
+    a.setMode("rank");
+    expect(a.arrange(cards).map((c) => c.id)).toEqual([2, 5, 4, 1, 3]);
+  });
+});
