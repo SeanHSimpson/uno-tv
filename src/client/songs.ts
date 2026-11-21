@@ -1,4 +1,4 @@
-// The music: complete public-domain pieces, played on a synthesized music box.
+// The music: complete public-domain pieces, played on a recorded grand piano (see piano.ts).
 //
 // - Chopin's Nocturne Op. 9 No. 2, Grieg's "In the Hall of the Mountain King" (his own
 //   piano version) and Petzold's Minuet in G come from the Mutopia Project's free MIDI
@@ -8,6 +8,8 @@
 //   Sousa's The Stars and Stripes Forever, Beethoven's Für Elise, Debussy's Clair de Lune,
 //   Satie's Gymnopédie No. 1 and Pachelbel's Canon (the melody line, with the famous
 //   ground bass and its chords added here).
+// - Upbeat additions, also from the Mutopia Project (public domain): Sousa's The Liberty Bell
+//   March, Schubert's Marche militaire No. 1 (piano four hands) and Chopin's "Minute Waltz".
 // - Korobeiniki is a short Russian folk tune (the whole song is 8 bars), so it gets a
 //   hand-written arrangement: four verses with harmony, an octave lift and the
 //   traditional speed-up on every repeat.
@@ -18,8 +20,11 @@ import { CLAIR_DE_LUNE } from "./music/clairDeLune";
 import { ENTERTAINER } from "./music/entertainer";
 import { FUR_ELISE } from "./music/furElise";
 import { GYMNOPEDIE } from "./music/gymnopedie";
+import { LIBERTY_BELL } from "./music/libertyBell";
 import { MAPLE_LEAF } from "./music/mapleLeaf";
+import { MARCHE_MILITAIRE } from "./music/marcheMilitaire";
 import { MINUET } from "./music/minuet";
+import { MINUTE_WALTZ } from "./music/minuteWaltz";
 import { MOUNTAIN_KING } from "./music/mountainKing";
 import { NACHTMUSIK } from "./music/nachtmusik";
 import { NOCTURNE } from "./music/nocturne";
@@ -195,6 +200,9 @@ export const SONGS: Song[] = [
   { name: "Rondo alla Turca", mode: "game", bpm: ALLA_TURCA.bpm, build: () => fromScore(ALLA_TURCA) },
   { name: "Eine kleine Nachtmusik", mode: "game", bpm: NACHTMUSIK.bpm, build: () => fromScore(NACHTMUSIK) },
   { name: "The Stars and Stripes Forever", mode: "game", bpm: STARS_STRIPES.bpm, build: () => fromScore(STARS_STRIPES) },
+  { name: "The Liberty Bell March", mode: "game", bpm: LIBERTY_BELL.bpm, build: () => fromScore(LIBERTY_BELL) },
+  { name: "Marche militaire No. 1", mode: "game", bpm: MARCHE_MILITAIRE.bpm, build: () => fromScore(MARCHE_MILITAIRE) },
+  { name: "Minute Waltz", mode: "game", bpm: MINUTE_WALTZ.bpm, build: () => fromScore(MINUTE_WALTZ) },
   { name: "Nocturne Op. 9 No. 2", mode: "calm", bpm: NOCTURNE.bpm, build: () => fromScore(NOCTURNE) },
   { name: "Clair de Lune", mode: "calm", bpm: CLAIR_DE_LUNE.bpm, build: () => fromScore(CLAIR_DE_LUNE, undefined, 1.6) },
   { name: "Für Elise", mode: "calm", bpm: FUR_ELISE.bpm, build: () => fromScore(FUR_ELISE) },
