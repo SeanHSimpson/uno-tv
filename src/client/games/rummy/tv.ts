@@ -3,8 +3,9 @@
 import type { RummyEvent, RummyPublic } from "../../../shared/games/rummy/engine";
 import { audio } from "../../audio";
 import { confetti } from "../../fx";
-import { pcardHtml, shortCard } from "../../playingCards";
-import { $, avatar, esc, reducedMotion } from "../../ui";
+import type { PCard } from "../../../shared/games/rummy/cards";
+import { pcardEl, pcardHtml, shortCard } from "../../playingCards";
+import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
 
 export function rummyTv(ctx: TvCtx): GameView {
@@ -31,6 +32,11 @@ export function rummyTv(ctx: TvCtx): GameView {
     state = snap.pub;
     render(snap.pub);
     if (!snap.first) react(snap.events as RummyEvent[]);
+    else {
+      // The game screen appears with the opening deal itself: deal it out once the table is drawn.
+      const deal = (snap.events as RummyEvent[]).find((e) => e.type === "deal");
+      if (deal && deal.type === "deal" && !reducedMotion()) setTimeout(() => alive && dealAnimation(deal.first), 60);
+    }
   }
 
   function render(s: RummyPublic) {
@@ -136,9 +142,56 @@ export function rummyTv(ctx: TvCtx): GameView {
     setTimeout(() => el.remove(), 1900);
   }
 
+  /** Like $, but null when it isn't there (an empty discard pile, nobody down yet). */
+  const q = (sel: string) => document.querySelector<HTMLElement>(sel);
+
+  // ---------- cards flying around the table ----------
+
+  /** A card-sized box centred on an element (where a flying card starts or lands). */
+  function cardBox(el: Element | null | undefined, w: number): DOMRect | null {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return new DOMRect(r.left + r.width / 2 - w / 2, r.top + r.height / 2 - (w * 1.5) / 2, w, w * 1.5);
+  }
+  const miniW = () => (q("#rm-boards .rm-mini") as HTMLElement | null)?.getBoundingClientRect().width || innerHeight * 0.054;
+  /** Where a player's hand is on the TV: their little fan of card backs (or their name once down). */
+  const handOf = (pid: string) => cardBox(boardOf(pid)?.querySelector(".rm-fan, .rm-down, .rm-head .avatar"), miniW());
+  const stockBox = () => q("#rm-stock .pcard")?.getBoundingClientRect() ?? null;
+
+  /** Fly a card onto a card that's already drawn in place (hidden until it lands). */
+  function flyOnto(card: PCard | null, from: DOMRect | null, target: HTMLElement | null | undefined, delay: number, spin = 0) {
+    if (!from || !target) return;
+    target.style.visibility = "hidden";
+    fly(pcardEl(card), from, target.getBoundingClientRect(), { delay, spin, duration: 520 }).then(() => (target.style.visibility = ""));
+  }
+  const spinOf = (c: PCard) => ((c.id * 47) % 34) - 17;
+
+  /** The deal: card backs go round the table from the deck, a few each. */
+  function dealAnimation(first: string) {
+    if (!state) return;
+    const from = stockBox();
+    if (!from) return;
+    const ps = state.players;
+    const start = Math.max(0, ps.findIndex((p) => p.id === first));
+    const n = ps.length;
+    const rounds = 3;
+    for (let k = 0; k < rounds; k++)
+      for (let j = 0; j < n; j++) {
+        const p = ps[(start + j) % n]!;
+        const to = handOf(p.id);
+        if (to) fly(pcardEl(null), from, to, { delay: (k * n + j) * 85, duration: 430, spin: (j % 2 ? 1 : -1) * 20 });
+      }
+    const discard = q("#rm-discard .pcard") as HTMLElement | null;
+    if (discard) flyOnto(state.discardTop ?? null, from, discard, rounds * n * 85 + 150, -12);
+    return rounds * n * 85 + 500;
+  }
+
   function react(events: RummyEvent[]) {
     const log: string[] = [];
+    const quick = reducedMotion();
+    let delay = 0;
     for (const e of events) {
+      if (!quick) delay = animate(e, delay);
       switch (e.type) {
         case "deal":
           audio.shuffle();
@@ -161,18 +214,14 @@ export function rummyTv(ctx: TvCtx): GameView {
           audio.cardPlay("wild");
           bubble(e.pid, e.partial ? "Part down!" : "Down! ✓", "good");
           log.push(e.partial ? `${names(e.pid)} laid down part of their contract` : `${names(e.pid)} laid down their contract`);
-          if (!reducedMotion())
-            for (const id of e.melds) document.querySelector(`[data-meld="${id}"]`)?.animate([{ transform: "scale(1.15)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 500 });
           break;
         case "hit":
           audio.cardPlay("normal");
           log.push(`${names(e.pid)} added ${e.cards.map(shortCard).join(" ")} to a group`);
-          if (!reducedMotion()) document.querySelector(`[data-meld="${e.meldId}"]`)?.animate([{ filter: "brightness(1.6)" }, { filter: "none" }], { duration: 700 });
           break;
         case "discard":
           audio.cardPlay("normal");
           log.push(`${names(e.pid)} discarded the ${shortCard(e.card)}`);
-          if (!reducedMotion()) $("#rm-discard .pcard")?.animate([{ transform: "translateY(-6vmin) rotate(-10deg)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 400 });
           break;
         case "reshuffle":
           audio.shuffle();
@@ -185,6 +234,55 @@ export function rummyTv(ctx: TvCtx): GameView {
       }
     }
     if (log.length) $("#rm-log").innerHTML = log.slice(-3).join(" <span class='dot'>•</span> ");
+  }
+
+  /** Start this event's flying cards `delay` ms from now; returns when the next event's should start. */
+  function animate(e: RummyEvent, delay: number): number {
+    const meldCards = (id: number) => [...document.querySelectorAll<HTMLElement>(`[data-meld="${id}"] .pcard`)];
+    switch (e.type) {
+      case "deal":
+        return delay + (dealAnimation(e.first) ?? 0);
+      case "draw": {
+        const to = handOf(e.pid);
+        const from = e.from === "discard" ? cardBox(q("#rm-discard"), q("#rm-stock .pcard")?.getBoundingClientRect().width ?? 60) : stockBox();
+        if (from && to) fly(pcardEl(e.from === "discard" ? (e.card ?? null) : null), from, to, { delay, duration: 480 });
+        return delay + 260;
+      }
+      case "bought": {
+        const to = handOf(e.pid);
+        const from = cardBox(q("#rm-discard"), q("#rm-stock .pcard")?.getBoundingClientRect().width ?? 60);
+        if (from && to) fly(pcardEl(e.card), from, to, { delay, duration: 480 });
+        const stock = stockBox();
+        if (stock && to) fly(pcardEl(null), stock, to, { delay: delay + 200, duration: 480 });
+        return delay + 420;
+      }
+      case "down": {
+        // Each new group's cards fly out of the player's hand into place, one after another.
+        const from = handOf(e.pid);
+        let k = 0;
+        for (const id of e.melds) {
+          const m = state?.melds.find((x) => x.id === id);
+          meldCards(id).forEach((el, i) => m?.cards[i] && flyFace(m.cards[i]!, from, el, delay + k++ * 70));
+        }
+        return delay + k * 70 + 300;
+      }
+      case "hit": {
+        const from = handOf(e.pid);
+        const els = meldCards(e.meldId);
+        e.cards.forEach((c, i) => flyFace(c, from, els.find((el) => el.dataset.id === String(c.id)), delay + i * 90));
+        return delay + e.cards.length * 90 + 250;
+      }
+      case "discard": {
+        flyFace(e.card, handOf(e.pid), q("#rm-discard .pcard") as HTMLElement | null, delay, spinOf(e.card) - 30);
+        return delay + 380;
+      }
+      default:
+        return delay;
+    }
+  }
+
+  function flyFace(card: PCard, from: DOMRect | null, target: HTMLElement | null | undefined, delay: number, spin = 0) {
+    flyOnto(card, from, target, delay, spin);
   }
 
   return {

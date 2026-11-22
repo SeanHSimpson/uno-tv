@@ -10,6 +10,7 @@ import { pcardEl, pcardHtml, shortCard } from "../../playingCards";
 import { $, avatar, esc, toast } from "../../ui";
 import { tableSizeMenu } from "../tableSize";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
+import { NewCards } from "../../newCards";
 
 export function rummyPhone(ctx: PhoneCtx): GameView {
   const pid = ctx.pid;
@@ -18,6 +19,8 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   let me: RummyPrivate | null = null;
   let isHost = false;
   let selected = new Set<number>();
+  // Cards that just came into your hand wear a "New" badge for a while.
+  const fresh = new NewCards(() => me && renderHand());
   let wasMyTurn = false;
   const rankOf = (c: PCard) => c.rank || 99;
   // Suit order everywhere: clubs, diamonds, spades, hearts (colors alternate); jokers last.
@@ -143,6 +146,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   function update(snap: GameSnap<RummyPublic, RummyPrivate>) {
     state = snap.pub;
     me = snap.me;
+    if (me) fresh.update(me.hand.map((c) => c.id));
     isHost = snap.room.hostId === pid;
     // Forget selections for cards that left the hand.
     const ids = new Set((me?.hand ?? []).map((c) => c.id));
@@ -244,7 +248,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       ...arranger.arrange(m.hand).map((c) => {
         const el = pcardEl(c, "hand-card");
         el.classList.toggle("selected", selected.has(c.id));
-        el.classList.toggle("just-drew", c.id === m.tookFromDiscard);
+        el.classList.toggle("just-drew", c.id === m.tookFromDiscard || fresh.isNew(c.id));
         el.setAttribute("role", "button");
         el.setAttribute("aria-pressed", String(selected.has(c.id)));
         return el;
@@ -349,6 +353,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       return skip + tableSizeMenu(s.table, [1, 1.5, 2]);
     },
     destroy() {
+      fresh.stop();
       ac.abort();
       document.body.classList.remove("my-turn");
       ctx.el.innerHTML = "";
