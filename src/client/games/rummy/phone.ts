@@ -294,25 +294,30 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     // Reuse existing elements by ID (like OhNo) so draws/sorts don't rebuild the whole hand.
     const existing = new Map([...hand.querySelectorAll<HTMLElement>(":scope > .pcard")].map((el) => [Number(el.dataset.id), el]));
     const shown = cardsLanded();
-    hand.replaceChildren(
-      ...arranged.map((c, i) => {
-        let el = existing.get(c.id);
-        if (el) {
-          // Clear any leftover drag state (reorder uses style.translate).
-          el.style.translate = "";
-          el.classList.remove("reorder-drag");
-        } else {
-          el = pcardEl(c, "hand-card");
-          el.setAttribute("role", "button");
-        }
-        // During the deal a card appears when it lands on my board on the TV.
-        el.classList.toggle("deal-wait", i >= shown);
-        el.classList.toggle("selected", selected.has(c.id));
-        el.classList.toggle("just-drew", c.id === m.tookFromDiscard || fresh.isNew(c.id));
-        el.setAttribute("aria-pressed", String(selected.has(c.id)));
-        return el;
-      }),
-    );
+    const els = arranged.map((c, i) => {
+      let el = existing.get(c.id);
+      if (el) {
+        // Clear any leftover drag state (reorder uses style.translate).
+        el.style.translate = "";
+        el.classList.remove("reorder-drag");
+      } else {
+        el = pcardEl(c, "hand-card");
+        el.setAttribute("role", "button");
+      }
+      // During the deal a card appears when it lands on my board on the TV.
+      el.classList.toggle("deal-wait", i >= shown);
+      el.classList.toggle("selected", selected.has(c.id));
+      el.classList.toggle("just-drew", c.id === m.tookFromDiscard || fresh.isNew(c.id));
+      el.setAttribute("aria-pressed", String(selected.has(c.id)));
+      return el;
+    });
+    // Only touch the DOM order when the hand actually changed: calling replaceChildren on
+    // unchanged cards detaches and re-inserts every node, which flickers and restarts animations.
+    const sameOrder = els.length === hand.children.length && els.every((el, i) => hand.children[i] === el);
+    if (!sameOrder) {
+      if (!dealing) for (const el of els) el.classList.remove("deal-in");
+      hand.replaceChildren(...els);
+    }
     // Also covers the deferred reorder.later and NewCards paths that call renderHand alone.
     layoutHand();
   }
@@ -343,6 +348,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
         if (el?.classList.contains("deal-wait")) {
           el.classList.remove("deal-wait");
           el.classList.add("deal-in");
+          el.addEventListener("animationend", () => el.classList.remove("deal-in"), { once: true });
           haptic("select");
         }
       }, at(ms)),
