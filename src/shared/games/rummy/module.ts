@@ -11,7 +11,7 @@ export const rummy: GameModule<E.RummyState, E.RummySettings, E.RummyAction, E.R
     name: "Contract Rummy",
     tagline: "Seven rounds, seven contracts. Build sets and runs, go out first, keep your score low.",
     howTo:
-      "Each round has a contract, like 2 sets of 3 or a set plus a run of 4. Draw, collect, lay down your contract, then add cards to any group to empty your hand. Lowest total after all the rounds wins. Want a discard out of turn? Shout \"May I?\".",
+      "Each round has a contract, like 2 sets of 3 or a set plus a run of 4. Draw, collect, lay down your contract, then add cards to any group to empty your hand. Lowest total after all the rounds wins. Want the discard when it isn't your turn? Tap it on your phone for \"May I?\" (you get it plus a penalty card, if the player whose turn it is draws from the deck).",
     emoji: "♠️",
     minPlayers: 2,
     maxPlayers: 8,
