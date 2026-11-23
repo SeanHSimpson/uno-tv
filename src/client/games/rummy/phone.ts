@@ -251,8 +251,8 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       ...arranged.map((c) => {
         let el = existing.get(c.id);
         if (el) {
-          // Clear any leftover drag state.
-          el.style.transform = "";
+          // Clear any leftover drag state (reorder uses style.translate).
+          el.style.translate = "";
           el.classList.remove("reorder-drag");
         } else {
           el = pcardEl(c, "hand-card");
@@ -264,7 +264,8 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
         return el;
       }),
     );
-    // layoutHand is called from render() (and the deferred reorder path).
+    // Also covers the deferred reorder.later and NewCards paths that call renderHand alone.
+    layoutHand();
   }
 
   /** Same idea as OhNo!: size cards so the whole hand fits without scrolling. */
