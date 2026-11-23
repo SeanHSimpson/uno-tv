@@ -15,6 +15,7 @@ function lanIp(): string {
 export default defineConfig({
   plugins: [cloudflare()],
   define: { __LAN_IP__: JSON.stringify(lanIp()) },
-  server: { host: true },
+  // Video projects (explainroo) write thousands of frames while they render; don't watch them.
+  server: { host: true, watch: { ignored: ["**/videos/**"] } },
   preview: { host: true },
 });

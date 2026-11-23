@@ -1,0 +1,31 @@
+{
+  "title": "How to play Euchre",
+  "theme": "midnight",
+  "size": "16:9",
+  "voice": "af_heart",
+  "music": {
+    "volume": 0.35
+  },
+  "captions": "auto",
+  "watermark": false,
+  "heard": {
+    "euchred": [
+      "u curd",
+      "ucurd"
+    ],
+    "Euchre": [
+      "UKER",
+      "YUKER"
+    ],
+    "Here": [
+      "Hear"
+    ],
+    "led": [
+      "lead"
+    ],
+    "two": [
+      "too"
+    ]
+  },
+  "defaults": "0.6"
+}

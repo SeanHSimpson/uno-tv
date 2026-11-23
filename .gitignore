@@ -4,3 +4,8 @@ dist
 .dev.vars*
 *.log
 screenshot/
+
+# explainroo renders and build files (rebuild with: npx --yes explainroo render videos/<name>)
+videos/*/out/
+videos/*/build/
+videos/*/history/
