@@ -35,9 +35,12 @@ export function rummyTv(ctx: TvCtx): GameView {
     }));
   }
 
-  /** How long the deal animation lasts for `n` players (3 rounds of cards + final discard). */
+  /** Rounds of cards dealt around the table before the discard lands. */
+  const DEAL_ROUNDS = 3;
+
+  /** How long the deal animation lasts for `n` players. */
   function dealDuration(n: number) {
-    return 3 * n * 85 + 500;
+    return DEAL_ROUNDS * n * 85 + 500;
   }
 
   function update(snap: GameSnap<RummyPublic>) {
@@ -191,15 +194,14 @@ export function rummyTv(ctx: TvCtx): GameView {
     const ps = state.players;
     const start = Math.max(0, ps.findIndex((p) => p.id === first));
     const n = ps.length;
-    const rounds = 3;
-    for (let k = 0; k < rounds; k++)
+    for (let k = 0; k < DEAL_ROUNDS; k++)
       for (let j = 0; j < n; j++) {
         const p = ps[(start + j) % n]!;
         const to = handOf(p.id);
         if (to) fly(pcardEl(null), from, to, { delay: (k * n + j) * 85, duration: 430, spin: (j % 2 ? 1 : -1) * 20 });
       }
     const discard = q("#rm-discard .pcard") as HTMLElement | null;
-    if (discard) flyOnto(state.discardTop ?? null, from, discard, rounds * n * 85 + 150, -12);
+    if (discard) flyOnto(state.discardTop ?? null, from, discard, DEAL_ROUNDS * n * 85 + 150, -12);
   }
 
   function react(events: RummyEvent[]) {
