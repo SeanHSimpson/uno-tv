@@ -51,13 +51,13 @@ describe("HandArranger piles and stacks", () => {
     a.setMode("rank");
     const out = a.arrange(cards);
     expect(out.map((c) => c.id)).toEqual([2, 5, 4, 3, 1]);
-    expect(a.piles).toEqual({ style: "piles", groups: [[2, 5], [4], [3, 1]] });
+    expect(a.piles).toEqual({ style: "piles", groups: [[2, 5], [4], [3, 1]], align: "center" });
     a.setMode("rank");
     a.arrange(cards);
     expect(a.piles?.style).toBe("cascade");
     a.setMode("suit");
     a.arrange(cards);
-    expect(a.piles).toEqual({ style: "rows", groups: [[2, 3], [1], [5, 4]] });
+    expect(a.piles).toEqual({ style: "rows", groups: [[2, 3], [1], [5, 4]], align: "left" });
     a.setMode("suit");
     a.arrange(cards);
     expect(a.piles?.style).toBe("cascade");

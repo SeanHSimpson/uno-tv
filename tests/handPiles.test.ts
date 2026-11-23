@@ -71,3 +71,22 @@ describe("layoutPiles", () => {
     expect(spots.get(10)!.x).toBeGreaterThan(spots.get(8)!.x);
   });
 });
+
+describe("layoutPiles align", () => {
+  // A Euchre hand by suit: trump, then two other suits. Short rows that leave room to the right.
+  const EUCHRE = [[1, 2], [3, 4], [5]];
+  for (const style of ["rows", "cascade"] as PileStyle[]) {
+    it(`${style}: "left" starts the hand at the left edge`, () => {
+      const spots = layoutPiles(EUCHRE, style, BOX, 104, "left");
+      expect(Math.min(...[...spots.values()].map((s) => s.x))).toBe(0);
+      inside(spots);
+    });
+    it(`${style}: "center" (the default) leaves room on both sides`, () => {
+      const spots = [...layoutPiles(EUCHRE, style, BOX, 104).values()];
+      const left = Math.min(...spots.map((s) => s.x));
+      const right = BOX.W - Math.max(...spots.map((s) => s.x + s.w));
+      expect(left).toBeGreaterThan(0);
+      expect(Math.abs(left - right)).toBeLessThan(1);
+    });
+  }
+});

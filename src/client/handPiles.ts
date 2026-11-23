@@ -3,9 +3,12 @@
 // - "cascade": the same piles, copies stepping down like solitaire columns.
 // - "rows":    one row per group, each card tucked over the one before it.
 // Every card keeps its top-left corner (rank and suit) showing. Cards are 2:3.
+// `align`: "center" puts the block in the middle of the box; "left" starts it at the left edge
+// (sorted by suit, so the hand reads from the left like one held in your hand).
 
 export type PileStyle = "piles" | "cascade" | "rows";
 export type Spot = { x: number; y: number; w: number };
+export type PileAlign = "center" | "left";
 
 const GAP = 10;
 const MIN_W = 30;
@@ -18,30 +21,36 @@ const ROW_DX = 0.34;
 /** Rows may overlap, but never so much that the corner of the row above is hidden. */
 const MIN_ROW_STEP = 0.42;
 
-export function layoutPiles(groups: number[][], style: PileStyle, box: { W: number; H: number }, maxCw: number): Map<number, Spot> {
+export function layoutPiles(
+  groups: number[][],
+  style: PileStyle,
+  box: { W: number; H: number },
+  maxCw: number,
+  align: PileAlign = "center",
+): Map<number, Spot> {
   const gs = groups.filter((g) => g.length);
   // Too cramped for this style (a short hand area)? Plain piles, then one overlapping strip.
   const tries: PileStyle[] = style === "piles" ? ["piles"] : [style, "piles"];
   for (const st of tries)
     for (let w = Math.floor(maxCw); w >= MIN_W; w--) {
-      const spots = st === "rows" ? stackedRows(gs, w, box) : flow(gs, SPREAD[st], w, box);
+      const spots = st === "rows" ? stackedRows(gs, w, box, align) : flow(gs, SPREAD[st], w, box, align);
       if (spots) return spots;
     }
-  return strip(gs.flat(), box, maxCw);
+  return strip(gs.flat(), box, maxCw, align);
 }
 
 /** Last resort: every card in one row, overlapping, as big as the box allows. */
-function strip(ids: number[], box: { W: number; H: number }, maxCw: number) {
+function strip(ids: number[], box: { W: number; H: number }, maxCw: number, align: PileAlign) {
   const n = Math.max(1, ids.length);
   const w = Math.max(1, Math.min(maxCw, box.H / 1.5, box.W / (1 + ROW_DX * (n - 1))));
   const step = n > 1 ? Math.min(w + GAP, (box.W - w) / (n - 1)) : 0;
-  const x0 = Math.max(0, (box.W - (w + step * (n - 1))) / 2);
+  const x0 = align === "left" ? 0 : Math.max(0, (box.W - (w + step * (n - 1))) / 2);
   const y0 = Math.max(0, (box.H - w * 1.5) / 2);
   return new Map(ids.map((id, i) => [id, { x: x0 + step * i, y: y0, w }]));
 }
 
-/** Piles left to right, wrapping into rows; each row centred, the whole block centred. */
-function flow(groups: number[][], { dx, dy }: { dx: number; dy: number }, w: number, box: { W: number; H: number }) {
+/** Piles left to right, wrapping into rows; each row centred (or from the left), the block centred up and down. */
+function flow(groups: number[][], { dx, dy }: { dx: number; dy: number }, w: number, box: { W: number; H: number }, align: PileAlign) {
   const h = w * 1.5;
   type Row = { piles: { ids: number[]; pw: number }[]; width: number; height: number };
   const rows: Row[] = [];
@@ -64,7 +73,7 @@ function flow(groups: number[][], { dx, dy }: { dx: number; dy: number }, w: num
   const out = new Map<number, Spot>();
   let y = Math.max(0, (box.H - total) / 2);
   for (const r of rows) {
-    let x = Math.max(0, (box.W - r.width) / 2);
+    let x = align === "left" ? 0 : Math.max(0, (box.W - r.width) / 2);
     for (const p of r.piles) {
       p.ids.forEach((id, i) => out.set(id, { x: x + dx * w * i, y: y + dy * h * i, w }));
       x += p.pw + GAP;
@@ -74,14 +83,14 @@ function flow(groups: number[][], { dx, dy }: { dx: number; dy: number }, w: num
   return out;
 }
 
-/** One row per group, left-aligned as a block that's centred in the box. */
-function stackedRows(groups: number[][], w: number, box: { W: number; H: number }) {
+/** One row per group, left-aligned as a block that's centred in the box (or at its left edge). */
+function stackedRows(groups: number[][], w: number, box: { W: number; H: number }, align: PileAlign) {
   const h = w * 1.5;
   const R = groups.length;
   const step = R > 1 ? Math.min(h + GAP, (box.H - h) / (R - 1)) : 0;
   const widest = Math.max(0, ...groups.map((g) => w + ROW_DX * w * (g.length - 1)));
   if ((R > 1 && step < MIN_ROW_STEP * h) || widest > box.W || h > box.H) return null;
-  const x0 = Math.max(0, (box.W - widest) / 2);
+  const x0 = align === "left" ? 0 : Math.max(0, (box.W - widest) / 2);
   const y0 = Math.max(0, (box.H - (h + step * (R - 1))) / 2);
   const out = new Map<number, Spot>();
   groups.forEach((g, r) => g.forEach((id, i) => out.set(id, { x: x0 + ROW_DX * w * i, y: y0 + step * r, w })));

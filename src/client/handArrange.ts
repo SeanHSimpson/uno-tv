@@ -7,7 +7,7 @@
 //   (tap the button again to switch; see handPiles.ts).
 // Taps still select cards: a press only becomes a drag once the finger moves.
 
-import { layoutPiles, type PileStyle } from "./handPiles";
+import { layoutPiles, type PileAlign, type PileStyle } from "./handPiles";
 
 type Card = { id: number };
 export type SortMode = "rank" | "suit" | "rows" | "free";
@@ -45,7 +45,7 @@ export class HandArranger<C extends Card> {
   /** Set while sorted into rows: where each card goes. */
   matrix: HandMatrix | null = null;
   /** Set while grouped by rank or suit: the groups (card ids) and how to lay them out. */
-  piles: { style: PileStyle; groups: number[][] } | null = null;
+  piles: { style: PileStyle; groups: number[][]; align: PileAlign } | null = null;
   rankStyle: RankStyle;
   suitStyle: SuitStyle;
   private rowsOf?: (c: C) => { row: number; col: number } | null;
@@ -100,7 +100,8 @@ export class HandArranger<C extends Card> {
       out = groups.flat();
       const style: PileStyle =
         mode === "rank" ? (this.rankStyle === "piles" ? "piles" : "cascade") : this.suitStyle === "rows" ? "rows" : "cascade";
-      this.piles = { style, groups: groups.map((g) => g.map((c) => c.id)) };
+      // Sorted by suit, the hand starts at the left edge; rank piles stay centred.
+      this.piles = { style, groups: groups.map((g) => g.map((c) => c.id)), align: mode === "suit" ? "left" : "center" };
     } else if (this.mode === "rows" && this.rowsOf) {
       const r = rowsLayout(cards, this.rowsOf);
       out = r.out;
@@ -222,7 +223,7 @@ export function rowsLayout<C extends Card>(cards: C[], rowsOf: (c: C) => { row: 
  */
 export function fitHand(
   box: HTMLElement,
-  arr: { mode: SortMode; layout: HandLayout; matrix: HandMatrix | null; piles: { style: PileStyle; groups: number[][] } | null },
+  arr: { mode: SortMode; layout: HandLayout; matrix: HandMatrix | null; piles: { style: PileStyle; groups: number[][]; align: PileAlign } | null },
   maxCw: number,
 ) {
   const { matrix, piles } = arr;
@@ -237,7 +238,7 @@ export function fitHand(
   box.classList.toggle("placed", !!piles);
   if (piles) {
     // Grouped: every card absolutely placed (see handPiles.ts).
-    const spots = layoutPiles(piles.groups, piles.style, { W, H }, maxCw);
+    const spots = layoutPiles(piles.groups, piles.style, { W, H }, maxCw, piles.align);
     const left = parseFloat(cs.paddingLeft) + 4;
     const top = parseFloat(cs.paddingTop) + 8;
     for (const el of cards) {
