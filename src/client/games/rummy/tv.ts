@@ -267,8 +267,8 @@ export function rummyTv(ctx: TvCtx): GameView {
         const delay = at(leavesAt(i, step));
         if (to && delay > 0) dealTimers.push(setTimeout(() => alive && fly(pcardEl(null), from, to, { duration: DEAL_FLY, spin: (seat % 2 ? 1 : -1) * 20 }), delay));
       });
-      const top = state?.discardTop ?? null;
-      if (discard) dealTimers.push(setTimeout(() => alive && flyOnto(top, from, discard, 0, -12, TURN_UP_FLY), at(turnUpAt(seats, each))));
+      // The turned-up card flies face down and shows its face as it lands on the pile.
+      if (discard) dealTimers.push(setTimeout(() => alive && flyOnto(null, from, discard, 0, -12, TURN_UP_FLY), at(turnUpAt(seats, each))));
     };
     afterLayout(() => go(1));
   }
@@ -340,13 +340,14 @@ export function rummyTv(ctx: TvCtx): GameView {
       case "draw": {
         const to = handOf(e.pid);
         const from = e.from === "discard" ? cardBox(q("#rm-discard"), q("#rm-stock .pcard")?.getBoundingClientRect().width ?? 60) : stockBox();
-        if (from && to) fly(pcardEl(e.from === "discard" ? (e.card ?? null) : null), from, to, { delay, duration: 480 });
+        // Cards going into a hand always fly face down, wherever they come from.
+        if (from && to) fly(pcardEl(null), from, to, { delay, duration: 480 });
         return delay + 260;
       }
       case "bought": {
         const to = handOf(e.pid);
         const from = cardBox(q("#rm-discard"), q("#rm-stock .pcard")?.getBoundingClientRect().width ?? 60);
-        if (from && to) fly(pcardEl(e.card), from, to, { delay, duration: 480 });
+        if (from && to) fly(pcardEl(null), from, to, { delay, duration: 480 });
         const stock = stockBox();
         if (stock && to) fly(pcardEl(null), stock, to, { delay: delay + 200, duration: 480 });
         return delay + 420;
