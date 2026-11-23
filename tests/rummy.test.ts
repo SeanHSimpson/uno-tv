@@ -68,6 +68,16 @@ describe("cards & melds", () => {
     // ...but not if they don't fit anywhere.
     expect(findContract([...hand, c(2, "S")], { sets: 1, runs: 1 }, true)).toBeNull();
   });
+
+  it("allocates runs before sets so a set can't steal the suit a run needs (regardless of card order)", () => {
+    // Two 3♠s before 3♥ in tap order: set of 3s must leave one 3♠ for the spades run.
+    const tapOrder = [c(3, "C"), c(3, "S"), c(3, "S"), c(4, "S"), c(5, "S"), c(3, "H"), J()];
+    const melds = findContract(tapOrder, { sets: 1, runs: 1 }, true);
+    expect(melds?.map((m) => m.kind).sort()).toEqual(["run", "set"]);
+    // Same when the run's suit sorts first (Clubs).
+    const clubsFirst = [c(3, "C"), c(3, "C"), c(3, "D"), c(3, "S"), c(4, "C"), c(5, "C"), J()];
+    expect(findContract(clubsFirst, { sets: 1, runs: 1 }, true)?.map((m) => m.kind).sort()).toEqual(["run", "set"]);
+  });
 });
 
 /** A round in the play stage with chosen hands. */

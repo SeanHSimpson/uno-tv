@@ -158,14 +158,19 @@ export function findContract(cards: PCard[], need: Contract, useAll: boolean): M
       return !!c;
     };
     if (cand.kind === "set") {
-      for (let k = 0; k < cand.naturals; k++) if (!take((c) => c.rank === cand.rank)) return null;
+      // Runs are picked first; prefer suits not in any chosen run so leftover cards can still extend them.
+      const runSuits = new Set(chosen.filter((c) => c.kind === "run").map((c) => c.cards[0]?.suit));
+      for (let k = 0; k < cand.naturals; k++) {
+        if (!take((c) => c.rank === cand.rank && !runSuits.has(c.suit)) && !take((c) => c.rank === cand.rank)) return null;
+      }
     } else {
       for (const v of cand.values) if (!take((c) => c.suit === cand.suit && (v === 14 ? c.rank === 1 : c.rank === v))) return null;
     }
     return out;
   };
 
-  const want: MeldKind[] = [...Array(need.sets).fill("set"), ...Array(need.runs).fill("run")];
+  // Pick runs before sets: runs need exact suits, while sets take any suit of that rank.
+  const want: MeldKind[] = [...Array(need.runs).fill("run"), ...Array(need.sets).fill("set")];
   const chosen: { kind: MeldKind; cards: PCard[]; jokers: number }[] = [];
   let result: MeldShape[] | null = null;
 
