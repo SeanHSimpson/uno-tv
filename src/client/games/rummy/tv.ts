@@ -28,14 +28,23 @@ export function rummyTv(ctx: TvCtx): GameView {
 
   const names = (pid: string) => esc(state?.players.find((p) => p.id === pid)?.name ?? "Someone");
 
+  /** Wait two animation frames so the just-rendered table has real sizes. */
+  function afterLayout(fn: () => void) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (alive) fn();
+    }));
+  }
+
   function update(snap: GameSnap<RummyPublic>) {
     state = snap.pub;
     render(snap.pub);
     if (!snap.first) react(snap.events as RummyEvent[]);
     else {
-      // The game screen appears with the opening deal itself: deal it out once the table is drawn.
+      // Opening deal: wait for layout so the stock and hand targets have real rects.
       const deal = (snap.events as RummyEvent[]).find((e) => e.type === "deal");
-      if (deal && deal.type === "deal" && !reducedMotion()) setTimeout(() => alive && dealAnimation(deal.first), 60);
+      if (deal && deal.type === "deal" && !reducedMotion()) {
+        afterLayout(() => dealAnimation(deal.first));
+      }
     }
   }
 
@@ -170,7 +179,11 @@ export function rummyTv(ctx: TvCtx): GameView {
   function dealAnimation(first: string) {
     if (!state) return;
     const from = stockBox();
-    if (!from) return;
+    if (!from || from.width < 8) {
+      // Layout still settling; try once more shortly.
+      setTimeout(() => alive && dealAnimation(first), 80);
+      return 0;
+    }
     const ps = state.players;
     const start = Math.max(0, ps.findIndex((p) => p.id === first));
     const n = ps.length;
@@ -241,7 +254,9 @@ export function rummyTv(ctx: TvCtx): GameView {
     const meldCards = (id: number) => [...document.querySelectorAll<HTMLElement>(`[data-meld="${id}"] .pcard`)];
     switch (e.type) {
       case "deal":
-        return delay + (dealAnimation(e.first) ?? 0);
+        // Defer so the just-rendered boards have sizes.
+        afterLayout(() => dealAnimation(e.first));
+        return delay + 800;
       case "draw": {
         const to = handOf(e.pid);
         const from = e.from === "discard" ? cardBox(q("#rm-discard"), q("#rm-stock .pcard")?.getBoundingClientRect().width ?? 60) : stockBox();
