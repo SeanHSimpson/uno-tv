@@ -244,16 +244,32 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       reorder.later(() => me && renderHand());
       return;
     }
-    hand.replaceChildren(
-      ...arranger.arrange(m.hand).map((c) => {
-        const el = pcardEl(c, "hand-card");
-        el.classList.toggle("selected", selected.has(c.id));
-        el.classList.toggle("just-drew", c.id === m.tookFromDiscard || fresh.isNew(c.id));
-        el.setAttribute("role", "button");
-        el.setAttribute("aria-pressed", String(selected.has(c.id)));
-        return el;
-      }),
-    );
+    const arranged = arranger.arrange(m.hand);
+    const desiredIds = arranged.map((c) => c.id);
+    const currentIds = [...hand.children].map((el) => Number((el as HTMLElement).dataset.id));
+    const sameOrder =
+      desiredIds.length === currentIds.length && desiredIds.every((id, i) => id === currentIds[i]);
+
+    if (sameOrder) {
+      // Update selection / "new" badges in place so the hand doesn't jump when UI chrome changes size.
+      for (const el of hand.children as unknown as HTMLElement[]) {
+        const id = Number(el.dataset.id);
+        el.classList.toggle("selected", selected.has(id));
+        el.classList.toggle("just-drew", id === m.tookFromDiscard || fresh.isNew(id));
+        el.setAttribute("aria-pressed", String(selected.has(id)));
+      }
+    } else {
+      hand.replaceChildren(
+        ...arranged.map((c) => {
+          const el = pcardEl(c, "hand-card");
+          el.classList.toggle("selected", selected.has(c.id));
+          el.classList.toggle("just-drew", c.id === m.tookFromDiscard || fresh.isNew(c.id));
+          el.setAttribute("role", "button");
+          el.setAttribute("aria-pressed", String(selected.has(c.id)));
+          return el;
+        }),
+      );
+    }
     layoutHand();
   }
 
