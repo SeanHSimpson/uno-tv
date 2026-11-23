@@ -245,32 +245,26 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       return;
     }
     const arranged = arranger.arrange(m.hand);
-    const desiredIds = arranged.map((c) => c.id);
-    const currentIds = [...hand.children].map((el) => Number((el as HTMLElement).dataset.id));
-    const sameOrder =
-      desiredIds.length === currentIds.length && desiredIds.every((id, i) => id === currentIds[i]);
-
-    if (sameOrder) {
-      // Update selection / "new" badges in place so the hand doesn't jump when UI chrome changes size.
-      for (const el of hand.children as unknown as HTMLElement[]) {
-        const id = Number(el.dataset.id);
-        el.classList.toggle("selected", selected.has(id));
-        el.classList.toggle("just-drew", id === m.tookFromDiscard || fresh.isNew(id));
-        el.setAttribute("aria-pressed", String(selected.has(id)));
-      }
-    } else {
-      hand.replaceChildren(
-        ...arranged.map((c) => {
-          const el = pcardEl(c, "hand-card");
-          el.classList.toggle("selected", selected.has(c.id));
-          el.classList.toggle("just-drew", c.id === m.tookFromDiscard || fresh.isNew(c.id));
+    // Reuse existing elements by ID (like OhNo) so draws/sorts don't rebuild the whole hand.
+    const existing = new Map([...hand.querySelectorAll<HTMLElement>(":scope > .pcard")].map((el) => [Number(el.dataset.id), el]));
+    hand.replaceChildren(
+      ...arranged.map((c) => {
+        let el = existing.get(c.id);
+        if (el) {
+          // Clear any leftover drag state.
+          el.style.transform = "";
+          el.classList.remove("reorder-drag");
+        } else {
+          el = pcardEl(c, "hand-card");
           el.setAttribute("role", "button");
-          el.setAttribute("aria-pressed", String(selected.has(c.id)));
-          return el;
-        }),
-      );
-    }
-    layoutHand();
+        }
+        el.classList.toggle("selected", selected.has(c.id));
+        el.classList.toggle("just-drew", c.id === m.tookFromDiscard || fresh.isNew(c.id));
+        el.setAttribute("aria-pressed", String(selected.has(c.id)));
+        return el;
+      }),
+    );
+    // layoutHand is called from render() (and the deferred reorder path).
   }
 
   /** Same idea as OhNo!: size cards so the whole hand fits without scrolling. */
