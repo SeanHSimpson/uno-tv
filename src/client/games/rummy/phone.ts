@@ -81,7 +81,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       if (state.mayI.includes(pid)) toast("You've asked. You'll get it if they draw from the deck.");
       else if (me.myTurn) return;
       else if (me.buysLeft <= 0) toast("You've used all your \"May I?\"s this round.");
-      else if (state.discardTop) toast("\"May I?\" works only before the player whose turn it is draws, and not on your own discard.");
+      else if (state.discardTop) toast("\"May I?\" works until the player whose turn it is discards, unless they took the card themselves. Not on your own discard.");
       return;
     }
     if (Date.now() < mayIArmed) {
@@ -92,7 +92,12 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       mayIArmed = Date.now() + 3000;
       haptic("select");
       const turnP = state.players.find((p) => p.id === state!.turnId);
-      toast(`Tap again for "May I?". If ${turnP ? turnP.name : "they"} draw${turnP ? "s" : ""} from the deck, you get the ${shortCard(state.discardTop!)} plus a penalty card.`);
+      const who = turnP ? turnP.name : "they";
+      toast(
+        state.stage === "play"
+          ? `Tap again for "May I?": you take the ${shortCard(state.discardTop!)} now, plus a penalty card.`
+          : `Tap again for "May I?". If ${who} draw${turnP ? "s" : ""} from the deck, you get the ${shortCard(state.discardTop!)} plus a penalty card.`,
+      );
       if (mayITimer) clearTimeout(mayITimer);
       mayITimer = setTimeout(() => render(), 3050);
     }

@@ -11,7 +11,7 @@ export const rummy: GameModule<E.RummyState, E.RummySettings, E.RummyAction, E.R
     name: "Contract Rummy",
     tagline: "Seven rounds, seven contracts. Build sets and runs, go out first, keep your score low.",
     howTo:
-      "Each round has a contract, like 2 sets of 3 or a set plus a run of 4. Draw, collect, lay down your contract, then add cards to any group to empty your hand. Lowest total after all the rounds wins. Want the discard when it isn't your turn? Tap it on your phone for \"May I?\" (you get it plus a penalty card, if the player whose turn it is draws from the deck).",
+      "Each round has a contract, like 2 sets of 3 or a set plus a run of 4. Draw, collect, lay down your contract, then add cards to any group to empty your hand. Lowest total after all the rounds wins. Want the discard when it isn't your turn? Tap it on your phone for \"May I?\" (you get it plus a penalty card, unless the player whose turn it is takes it themselves; you can ask until they discard).",
     emoji: "♠️",
     minPlayers: 2,
     maxPlayers: 8,
@@ -49,7 +49,7 @@ export const rummy: GameModule<E.RummyState, E.RummySettings, E.RummyAction, E.R
       case "discard":
         return E.discard(s, pid, Number(a.cardId));
       case "mayI":
-        return E.mayI(s, pid);
+        return E.mayI(s, pid, ctx.rng);
       case "nextRound":
         return E.nextRound(s, ctx.isHost, ctx.rng);
       case "skip":
@@ -90,8 +90,8 @@ export const rummy: GameModule<E.RummyState, E.RummySettings, E.RummyAction, E.R
     const cur = s.players[s.turn]!;
     // Right after a deal, nobody moves until the TV has dealt every card.
     const wait = justDealt(s) ? dealDuration(s.players.length, s.players[0]!.hand.length) : 0;
-    // A bot that isn't on turn may shout "May I?" before the current player draws.
-    if (s.stage === "draw" && s.settings.mayI) {
+    // A bot that isn't on turn may shout "May I?" while the discard is up for it.
+    if (E.mayIOpen(s)) {
       const buyer = s.players.find((p) => p.bot && p.id !== cur.id && botWantsMayI(s, p.id, ctx.rng));
       if (buyer) return { pid: buyer.id, delay: wait + 700 + ctx.rng() * 600 };
     }
@@ -101,7 +101,7 @@ export const rummy: GameModule<E.RummyState, E.RummySettings, E.RummyAction, E.R
 
   botActions(s, pid) {
     const cur = s.players[s.turn]!;
-    if (cur.id !== pid) return s.stage === "draw" ? [{ t: "mayI" }] : [];
+    if (cur.id !== pid) return E.mayIOpen(s) ? [{ t: "mayI" }] : [];
     return botTurn(s, pid);
   },
 
