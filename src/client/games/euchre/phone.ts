@@ -9,7 +9,7 @@ import { attachReorder, fitHand, HandArranger, type SortMode } from "../../handA
 import { $, avatar, esc, reducedMotion, toast } from "../../ui";
 import { tableSizeMenu } from "../tableSize";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
-import { ecardEl, ecardHtml, suitIcon } from "./cards";
+import { ecardEl, ecardHtml, HOWTO, suitIcon } from "./cards";
 import { NewCards } from "../../newCards";
 import { seatLandings } from "../../../shared/games/euchre/deal";
 
@@ -278,7 +278,8 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
              <div class="eu-pick-host"><button class="btn btn-ghost" data-gact="${act({ t: "shuffleTeams" })}">🎲 Random teams</button>
              <button class="btn btn-primary btn-xl" data-gact="${act({ t: "deal" })}">Deal ▶</button></div>`
           : `<p class="muted">The host deals when the teams are set.</p>`
-      }`;
+      }
+      <a class="btn btn-ghost eu-howto-link" href="${HOWTO}.mp4" target="_blank" rel="noopener">▶ How to play (3-minute video)</a>`;
   }
 
   /** A bigger look at the table: the trick so far, the last trick, and who's taken what. */

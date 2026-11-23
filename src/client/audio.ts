@@ -18,6 +18,7 @@ class AudioEngine {
   private sfxBus!: GainNode;
   private noise!: AudioBuffer;
   private mode: "calm" | "game" | null = null;
+  private held = false;
   private timer = 0;
   private playlist: Song[] = [];
   private songIdx = 0;
@@ -133,7 +134,19 @@ class AudioEngine {
   }
 
   private level() {
+    if (this.held) return 0;
     return this.mode === "calm" ? 0.45 : 0.55;
+  }
+
+  /** Hush the music while something else plays (a how-to video), then bring it back. */
+  holdMusic(on: boolean) {
+    this.held = on;
+    if (!this.ctx || !this.mode) return;
+    const g = this.musicBus.gain;
+    const now = this.ctx.currentTime;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(this.level(), now + (on ? 0.4 : 1.5));
   }
 
   /** 1 = normal; >1 speeds the music up (someone's on their last card!). */
@@ -143,7 +156,7 @@ class AudioEngine {
 
   /** Dip the music for a moment so a sound effect can land. */
   duck(seconds = 2.2, to = 0.12) {
-    if (!this.ctx || !this.mode) return;
+    if (!this.ctx || !this.mode || this.held) return;
     const g = this.musicBus.gain;
     const now = this.ctx.currentTime;
     g.cancelScheduledValues(now);

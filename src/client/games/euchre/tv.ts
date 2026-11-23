@@ -8,7 +8,7 @@ import { audio } from "../../audio";
 import { confetti } from "../../fx";
 import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
-import { ecardEl, ecardHtml, suitIcon } from "./cards";
+import { ecardEl, ecardHtml, HOWTO, suitIcon } from "./cards";
 import { DEAL_FLY, dealOrder, landsAt, leavesAt } from "../../../shared/games/euchre/deal";
 
 /** Seat 0 sits at the bottom, then clockwise: left, top, right. */
@@ -58,7 +58,39 @@ export function euchreTv(ctx: TvCtx): GameView {
     <section class="eu-banner" id="eu-banner" hidden></section>
     <section class="eu-teams-tv" id="eu-teams" hidden></section>
     <section class="tv-results overlay" id="eu-results" hidden></section>
+    <section class="eu-howto" id="eu-howto" hidden>
+      <video id="eu-howto-video" controls playsinline preload="none" poster="${HOWTO}.jpg">
+        <source src="${HOWTO}.mp4" type="video/mp4" />
+        <track kind="captions" src="${HOWTO}.vtt" srclang="en" label="English" default />
+      </video>
+      <button class="btn btn-ghost eu-howto-close" data-howto="close">✕ Close <small>(H)</small></button>
+    </section>
   </div>`;
+
+  // "How to play Euchre": a video on the TV. Opens from the button on the team screen or the H key.
+  const howto = $("#eu-howto");
+  const video = $("#eu-howto-video") as HTMLVideoElement;
+  const howtoOpen = () => !howto.hidden;
+  function showHowto(on: boolean) {
+    if (on === howtoOpen()) return;
+    howto.hidden = !on;
+    audio.holdMusic(on);
+    if (on) {
+      video.currentTime = 0;
+      void video.play().catch(() => {});
+    } else video.pause();
+  }
+  video.addEventListener("ended", () => showHowto(false));
+  ctx.el.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>("[data-howto]");
+    if (b) showHowto(b.dataset.howto === "open");
+  });
+  const onKey = (e: KeyboardEvent) => {
+    if (e.target instanceof HTMLInputElement) return;
+    if (e.key === "h" || e.key === "H") showHowto(!howtoOpen());
+    else if (e.key === "Escape") showHowto(false);
+  };
+  document.addEventListener("keydown", onKey);
 
   const name = (pid: string | null) => esc(state?.players.find((p) => p.id === pid)?.name ?? "Someone");
   const seatIndex = (pid: string) => state?.players.findIndex((p) => p.id === pid) ?? -1;
@@ -119,7 +151,8 @@ export function euchreTv(ctx: TvCtx): GameView {
       <p>Choose a team on your phone. Partners sit across the table from each other.</p>
       <div class="eu-pick-tv-row">${team(0)}<div class="eu-pick-tv-vs">vs</div>${team(1)}</div>
       ${undecided.length ? `<div class="eu-pick-tv-undecided"><small>Still choosing</small>${undecided.map((p) => `<span>${avatar(p, "sm")}${esc(p.name)}</span>`).join("")}</div>` : ""}
-      <p class="results-next">The host deals from their phone when the teams are set (or press <kbd>Enter</kbd> here). Anyone who hasn't picked fills an open seat.</p>`;
+      <p class="results-next">The host deals from their phone when the teams are set (or press <kbd>Enter</kbd> here). Anyone who hasn't picked fills an open seat.</p>
+      <button class="btn btn-ghost eu-howto-btn" data-howto="open">▶ How to play Euchre <small>3-minute video · or press <kbd>H</kbd></small></button>`;
   }
 
   function renderScores(s: EuchrePublic) {
@@ -369,12 +402,15 @@ export function euchreTv(ctx: TvCtx): GameView {
   return {
     update,
     onEnter() {
+      if (howtoOpen()) return void (video.paused ? video.play().catch(() => {}) : video.pause());
       if (state?.phase === "gameOver") ctx.send({ t: "restart" });
       else if (state?.phase === "teams") ctx.send({ t: "deal" });
     },
     destroy() {
       alive = false;
       for (const t of dealTimers) clearTimeout(t);
+      document.removeEventListener("keydown", onKey);
+      if (howtoOpen()) showHowto(false);
       document.body.classList.remove("theme-mi");
       ctx.el.innerHTML = "";
     },

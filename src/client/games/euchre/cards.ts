@@ -4,6 +4,9 @@
 
 import { RANK_LABEL, SUIT_NAMES, type ECard, type Suit } from "../../../shared/games/euchre/engine";
 
+/** The how-to-play video (public/videos: .mp4, .jpg poster, .vtt captions), made with explainroo from videos/euchre-rules. */
+export const HOWTO = "/videos/euchre-how-to-play";
+
 const W = 120;
 const H = 180;
 export const CHERRY = "#b8322b";

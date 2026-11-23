@@ -147,6 +147,7 @@ The classic four-player partnership game, dressed up north: a cedar table on a n
 - **On your phone:** **Suit** stacks your cards by suit (trump first), **Rank** piles them by rank (aces first); tap either again to switch between rows/piles and columns. Or drag them into your own order (**Free**) and fan them like a real hand. The table itself is on the TV, so your phone is all hand; **👀 Peek at table** shows the trick in progress, the last trick and who took it, and the score. When it's your call, the turned-up card shows right above the bidding buttons. If you're the dealer and pick it up, it says **New** for 20 seconds.
 - **On the TV**, the deal goes out three-then-two from the middle of the table, and each card played flies in from that player's seat.
 - **Cards on the TV:** Normal, Big (default) or Huge, in the lobby settings or ⚙︎ mid-game.
+- **How to play video:** while teams are being picked, **▶ How to play Euchre** on the TV (or press **H**) plays a 3-minute rules video with captions; the music pauses while it plays. **Enter** pauses it, **H** or **Esc** closes it. Phones get a link to watch it on their own screen. The video is made with [explainroo](https://www.explainroo.com) from `videos/euchre-rules` (rebuild with `npx --yes explainroo render videos/euchre-rules`, then copy a 720p version to `public/videos/`: Cloudflare serves files up to 25 MB).
 
 ## Fizzle!
 
