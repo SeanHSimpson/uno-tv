@@ -5,7 +5,10 @@
 // once you're down add cards to any group on the table, then discard one card. Empty
 // your hand to win the round; everyone else scores the cards they're still holding.
 // Lowest total after all rounds wins. "May I?": when you don't want to wait for your
-// turn, ask for the top discard; you get it plus a penalty card from the deck.
+// turn, ask for the top discard; you get it plus a penalty card from the deck. You can ask
+// until the player whose turn it is discards, unless they take that card themselves:
+// asked before they draw, it's settled when they draw from the deck (first in seat order
+// after them); asked after they drew from the deck, the first to ask gets it straight away.
 
 import { fail, shuffle, type Member, type Rng } from "../../common";
 import { canAdd, contractLabel, contractLeft, CONTRACTS, findContract, makeDeck, partOfContract, points, type Contract, type MeldShape, type PCard } from "./cards";
@@ -62,6 +65,9 @@ export interface RummyState {
   lastDiscardBy: string | null;
   /** The card the current player took from the discard pile this turn (can't throw it straight back). */
   tookFromDiscard: number | null;
+  /** The top discard the current player passed on by drawing from the deck: anyone can still
+   *  "May I?" it until they discard. (Missing in games saved before this existed.) */
+  passed?: number | null;
   settings: RummySettings;
   roundWinner: string | null;
   hostId: string | null;
@@ -126,6 +132,7 @@ export function newRummy(members: Member[], settings: RummySettings, hostId: str
     mayI: [],
     lastDiscardBy: null,
     tookFromDiscard: null,
+    passed: null,
     settings: { ...RUMMY_DEFAULTS, ...settings },
     roundWinner: null,
     hostId,
@@ -142,6 +149,7 @@ function deal(s: RummyState, rng: Rng): RummyEvent[] {
   s.melds = [];
   s.mayI = [];
   s.lastDiscardBy = null;
+  s.passed = null;
   s.roundWinner = null;
   const n = handSize(s.plan[s.round - 1]!);
   for (const p of s.players) {
@@ -198,24 +206,23 @@ export function draw(s: RummyState, pid: string, from: "stock" | "discard", rng:
     const card = s.discard.pop() ?? fail("The discard pile is empty.");
     p.hand.push(card);
     s.tookFromDiscard = card.id;
+    s.passed = null;
     events.push({ type: "draw", pid, from, card });
   } else {
     // Passing on the discard: if anyone asked "May I?", the first in seat order gets it (+1 penalty card).
+    let bought = false;
     if (s.mayI.length && s.discard.length) {
       const n = s.players.length;
       for (let k = 1; k < n; k++) {
         const buyer = s.players[(s.turn + k) % n]!;
         if (!s.mayI.includes(buyer.id)) continue;
-        const card = s.discard.pop()!;
-        buyer.hand.push(card);
-        const extra = drawFromStock(s, rng, events);
-        if (extra) buyer.hand.push(extra);
-        buyer.buys++;
-        sortHand(buyer.hand);
-        events.push({ type: "bought", pid: buyer.id, card });
+        buy(s, buyer, rng, events);
+        bought = true;
         break;
       }
     }
+    // Nobody bought it: the card they passed on stays up for "May I?" until they discard.
+    s.passed = !bought && s.discard.length ? s.discard[s.discard.length - 1]!.id : null;
     const card = drawFromStock(s, rng, events);
     if (card) p.hand.push(card);
     s.tookFromDiscard = null;
@@ -227,18 +234,45 @@ export function draw(s: RummyState, pid: string, from: "stock" | "discard", rng:
   return events;
 }
 
-export function mayI(s: RummyState, pid: string): RummyEvent[] {
+/** Whether the top discard is up for "May I?": "ask" before the current player draws (settled
+ *  when they do), "take" after they drew from the deck and passed on it (until they discard). */
+export function mayIOpen(s: RummyState): "ask" | "take" | null {
+  if (!s.settings.mayI || s.phase !== "playing" || !s.discard.length) return null;
+  if (s.stage === "draw") return "ask";
+  return s.passed != null && s.discard[s.discard.length - 1]!.id === s.passed ? "take" : null;
+}
+
+/** A "May I?" goes through: the top discard plus a penalty card from the deck. */
+function buy(s: RummyState, buyer: RummyPlayer, rng: Rng, events: RummyEvent[]) {
+  const card = s.discard.pop()!;
+  buyer.hand.push(card);
+  const extra = drawFromStock(s, rng, events);
+  if (extra) buyer.hand.push(extra);
+  buyer.buys++;
+  sortHand(buyer.hand);
+  events.push({ type: "bought", pid: buyer.id, card });
+}
+
+export function mayI(s: RummyState, pid: string, rng: Rng = Math.random): RummyEvent[] {
   if (!s.settings.mayI) fail("\"May I?\" is turned off for this game.");
   if (s.phase !== "playing") fail("The round is over.");
   const p = find(s, pid);
-  if (current(s).id === pid) fail("It's your turn, so just take it from the discard pile.");
-  if (s.stage !== "draw") fail("Too late: they've already drawn.");
+  if (current(s).id === pid) fail(s.stage === "draw" ? "It's your turn, so just take it from the discard pile." : "It's your turn.");
   if (!s.discard.length) fail("There's nothing on the discard pile.");
+  const open = mayIOpen(s);
+  if (!open) fail(s.tookFromDiscard !== null ? "Too late: they took that card themselves." : "Too late: that card's gone.");
   if (s.lastDiscardBy === pid) fail("You can't buy back your own discard.");
   if (p.buys >= MAX_BUYS) fail(`You've used all ${MAX_BUYS} "May I?"s this round.`);
   if (s.mayI.includes(pid)) return [];
-  s.mayI.push(pid);
-  return [{ type: "mayI", pid }];
+  if (open === "ask") {
+    s.mayI.push(pid);
+    return [{ type: "mayI", pid }];
+  }
+  // They drew from the deck and passed on it: the first to ask gets it now.
+  const events: RummyEvent[] = [{ type: "mayI", pid }];
+  buy(s, p, rng, events);
+  s.passed = null;
+  return events;
 }
 
 /** Lay down your contract. You pick the cards; we work out the sets and runs. */
@@ -304,6 +338,7 @@ export function discard(s: RummyState, pid: string, cardId: number): RummyEvent[
   s.discard.push(card!);
   s.lastDiscardBy = pid;
   s.mayI = [];
+  s.passed = null;
   const events: RummyEvent[] = [{ type: "discard", pid, card: card! }];
   const out = checkOut(s, p);
   if (out.length) return events.concat(out);
@@ -440,8 +475,7 @@ export function privateView(s: RummyState, pid: string) {
     canPlay: mine && s.stage === "play",
     /** The card you took from the discard pile this turn (you can't throw it straight back). */
     tookFromDiscard: mine ? s.tookFromDiscard : null,
-    canMayI:
-      s.settings.mayI && s.phase === "playing" && !mine && s.stage === "draw" && s.discard.length > 0 && s.lastDiscardBy !== pid && p.buys < MAX_BUYS && !s.mayI.includes(pid),
+    canMayI: !mine && !!mayIOpen(s) && s.lastDiscardBy !== pid && p.buys < MAX_BUYS && !s.mayI.includes(pid),
     buysLeft: MAX_BUYS - p.buys,
   };
 }

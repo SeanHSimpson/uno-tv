@@ -6,11 +6,12 @@ import { effSuit, power, shortCard, SUIT_NAMES, SUITS, TEAM_EMOJI, TEAM_NAMES } 
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
 import { attachReorder, fitHand, HandArranger, type SortMode } from "../../handArrange";
-import { $, avatar, esc, toast } from "../../ui";
+import { $, avatar, esc, reducedMotion, toast } from "../../ui";
 import { tableSizeMenu } from "../tableSize";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
 import { ecardEl, ecardHtml, suitIcon } from "./cards";
 import { NewCards } from "../../newCards";
+import { seatLandings } from "../../../shared/games/euchre/deal";
 
 export function euchrePhone(ctx: PhoneCtx): GameView {
   const pid = ctx.pid;
@@ -21,6 +22,9 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
   let selected: number | null = null;
   let alone = false;
   let wasMyTurn = false;
+  /** While the TV is dealing: when it started and when each of my cards lands on my seat there. */
+  let dealing: { start: number; lands: number[] } | null = null;
+  let dealTimers: ReturnType<typeof setTimeout>[] = [];
   document.body.classList.add("theme-mi");
   const RANK_ORDER: Record<number, number> = { 1: 6, 13: 5, 12: 4, 11: 3, 10: 2, 9: 1 };
   const trumpNow = () => state?.trump ?? null;
@@ -220,7 +224,8 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
 
   function renderBid(s: EuchrePublic, m: EuchrePrivate) {
     const el = $("#eu-bid");
-    const show = m.myTurn && (m.canOrder || m.canCall.length > 0);
+    // No bidding until all my cards have landed.
+    const show = m.myTurn && (m.canOrder || m.canCall.length > 0) && !dealing;
     el.hidden = !show;
     if (!show) return;
     const aloneBtn = `<button class="btn btn-ghost eu-alone ${alone ? "on" : ""}" data-bid="alone" aria-pressed="${alone}">${alone ? "✓ Going alone" : "Go alone?"}</button>`;
@@ -320,9 +325,12 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
       reorder.later(() => me && renderHand(me));
       return;
     }
+    const shown = cardsLanded();
     hand.replaceChildren(
-      ...arranger.arrange(m.hand).map((c) => {
+      ...arranger.arrange(m.hand).map((c, i) => {
         const el = ecardEl(c, "hand-card");
+        // During the deal a card appears when it lands on my seat on the TV.
+        el.classList.toggle("deal-wait", i >= shown);
         const usable = m.myTurn && (m.canDiscard || m.legal.includes(c.id));
         el.classList.toggle("selected", selected === c.id);
         el.classList.toggle("just-drew", fresh.isNew(c.id));
@@ -335,6 +343,43 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     );
     if (!m.hand.length) hand.innerHTML = `<p class="muted">${m.seated ? (m.sittingOut ? "Your partner's playing this one alone." : "") : "Watching this game."}</p>`;
   }
+  /** How many of my cards have landed on the TV so far (all of them when nobody's dealing). */
+  function cardsLanded() {
+    if (!dealing) return Infinity;
+    const t = performance.now() - dealing.start + 20; // timers can fire a hair early
+    return dealing.lands.filter((at) => at <= t).length;
+  }
+
+  /** Follow the TV's deal: show each of my cards as it lands on my seat there (timing in deal.ts). */
+  function followDeal(dealer: string) {
+    for (const t of dealTimers) clearTimeout(t);
+    dealTimers = [];
+    dealing = null;
+    const ps = state?.players ?? [];
+    const seat = ps.findIndex((p) => p.id === pid);
+    const d = ps.findIndex((p) => p.id === dealer);
+    if (seat < 0 || d < 0 || reducedMotion()) return;
+    const lands = seatLandings(ps.length, d, seat);
+    dealing = { start: performance.now(), lands };
+    dealTimers = lands.map((at, k) =>
+      setTimeout(() => {
+        const el = hand.children[k] as HTMLElement | undefined;
+        if (el?.classList.contains("deal-wait")) {
+          el.classList.remove("deal-wait");
+          el.classList.add("deal-in");
+          haptic("select");
+        }
+      }, at),
+    );
+    dealTimers.push(
+      setTimeout(() => {
+        dealing = null;
+        // All my cards are in: show any still hidden and let me bid.
+        render();
+      }, (lands.at(-1) ?? 0) + 50),
+    );
+  }
+
   const isTrump = (suit: Suit, rank: number, trump: Suit) =>
     suit === trump || (rank === 11 && (suit === "H" || suit === "D") === (trump === "H" || trump === "D"));
 
@@ -378,6 +423,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
         audio.shuffle();
         selected = null;
         arranger.reset();
+        followDeal(e.dealer);
       }
       if (e.type === "play" && e.pid === pid) audio.cardPlay("normal");
       if (e.type === "pickup" && e.pid === pid) toast(`You picked up the ${shortCard(e.card)}. Discard one card.`);
@@ -400,6 +446,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     },
     destroy() {
       fresh.stop();
+      for (const t of dealTimers) clearTimeout(t);
       ac.abort();
       document.body.classList.remove("my-turn", "theme-mi");
       ctx.el.innerHTML = "";

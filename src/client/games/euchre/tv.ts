@@ -9,6 +9,7 @@ import { confetti } from "../../fx";
 import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
 import { ecardEl, ecardHtml, suitIcon } from "./cards";
+import { DEAL_FLY, dealOrder, landsAt, leavesAt } from "../../../shared/games/euchre/deal";
 
 /** Seat 0 sits at the bottom, then clockwise: left, top, right. */
 const POS = ["bottom", "left", "top", "right"] as const;
@@ -37,6 +38,9 @@ export function euchreTv(ctx: TvCtx): GameView {
   let alive = true;
   let state: EuchrePublic | null = null;
   let trickKey = "";
+  /** While a deal is flying: when it started and the seat each card goes to, so seats fill up card by card. */
+  let deal: { start: number; order: number[] } | null = null;
+  let dealTimers: ReturnType<typeof setTimeout>[] = [];
   document.body.classList.add("theme-mi");
   ctx.el.innerHTML = `
   <div class="euchre-tv">
@@ -150,6 +154,14 @@ export function euchreTv(ctx: TvCtx): GameView {
     else el.innerHTML = "";
   }
 
+  /** How many cards a seat shows: during the deal, only the ones that have landed. */
+  function backsShown(seat: number, count: number) {
+    if (!deal) return count;
+    const t = performance.now() - deal.start + 20; // timers can fire a hair early
+    const landed = deal.order.filter((s, i) => s === seat && landsAt(i) <= t).length;
+    return Math.min(count, landed);
+  }
+
   function renderSeats(s: EuchrePublic) {
     const bidding = s.phase === "bid1" || s.phase === "bid2" || s.phase === "discard";
     s.players.forEach((p, i) => {
@@ -157,7 +169,7 @@ export function euchreTv(ctx: TvCtx): GameView {
       el.dataset.pid = p.id;
       const out = s.outId === p.id;
       el.className = `eu-seat pos-${POS[i]} t${p.team} ${s.turnId === p.id ? "turn" : ""} ${out ? "out" : ""} ${p.connected ? "" : "offline"}`;
-      const backs = Math.min(p.count, 6);
+      const backs = Math.min(backsShown(i, p.count), 6);
       el.innerHTML = `
         ${avatar(p)}
         <div class="eu-seat-info">
@@ -271,26 +283,37 @@ export function euchreTv(ctx: TvCtx): GameView {
     setTimeout(() => b.remove(), 2000);
   }
 
-  /** The deal, the way it's done at the cabin: three then two, round the table from the dealer's left. */
+  /** The deal: one card at a time from the deck, round the table from the dealer's left. Each phone
+   *  shows its card as it lands here (see deal.ts for the shared timing). */
   function dealAnimation(dealer: string) {
     const ps = state?.players ?? [];
     const center = $("#eu-center").getBoundingClientRect();
     const w = Math.min(innerWidth, innerHeight) * 0.075;
     const from = new DOMRect(center.left + center.width / 2 - w / 2, center.top + center.height / 2 - w * 0.75, w, w * 1.5);
-    const d = ps.findIndex((p) => p.id === dealer);
-    let n = 0;
-    for (const batch of [[3, 2, 3, 2], [2, 3, 2, 3]])
-      for (let j = 1; j <= 4; j++) {
-        const seat = (d + j) % 4;
-        if (state?.outId && ps[seat]?.id === state.outId) continue;
-        const r = document.getElementById(`eu-seat-${seat}`)?.getBoundingClientRect();
-        if (!r) continue;
-        const to = new DOMRect(r.left + r.width / 2 - w * 0.4, r.top + r.height / 2 - w * 0.6, w * 0.8, w * 1.2);
-        for (let k = 0; k < batch[j - 1]!; k++) fly(ecardEl(null), from, to, { delay: n * 140 + k * 45, duration: 420, spin: (j % 2 ? 1 : -1) * 25 });
-        n++;
-      }
+    const d = Math.max(0, ps.findIndex((p) => p.id === dealer));
+    const order = dealOrder(ps.length, d);
+    for (const t of dealTimers) clearTimeout(t);
+    dealTimers = [];
+    deal = { start: performance.now(), order };
+    order.forEach((seat, i) => {
+      const r = document.getElementById(`eu-seat-${seat}`)?.getBoundingClientRect();
+      if (!r) return;
+      const to = new DOMRect(r.left + r.width / 2 - w * 0.4, r.top + r.height / 2 - w * 0.6, w * 0.8, w * 1.2);
+      // Made when it leaves the deck, so cards don't wait in a pile on top of it.
+      dealTimers.push(setTimeout(() => alive && fly(ecardEl(null), from, to, { duration: DEAL_FLY, spin: (seat % 2 ? 1 : -1) * 25 }), leavesAt(i)));
+    });
+    // Each seat's hand grows as its cards land.
+    dealTimers.push(...order.map((_, i) => setTimeout(() => alive && state && renderSeats(state), landsAt(i))));
+    const done = landsAt(order.length - 1);
+    dealTimers.push(
+      setTimeout(() => {
+        deal = null;
+        if (alive && state) renderSeats(state);
+      }, done + 50),
+    );
+    if (state) renderSeats(state);
     // The turned-up card flips over last.
-    document.querySelector("#eu-center .eu-upcard")?.animate([{ scale: "0 1", opacity: 0 }, { scale: "0 1", opacity: 0, offset: 0.01 }, { scale: "1 1", opacity: 1 }], { duration: 300, delay: n * 140 + 100, fill: "backwards" });
+    document.querySelector("#eu-center .eu-upcard")?.animate([{ scale: "0 1", opacity: 0 }, { scale: "0 1", opacity: 0, offset: 0.01 }, { scale: "1 1", opacity: 1 }], { duration: 300, delay: done + 100, fill: "backwards" });
   }
 
   function react(events: EuchreEvent[]) {
@@ -351,6 +374,7 @@ export function euchreTv(ctx: TvCtx): GameView {
     },
     destroy() {
       alive = false;
+      for (const t of dealTimers) clearTimeout(t);
       document.body.classList.remove("theme-mi");
       ctx.el.innerHTML = "";
     },

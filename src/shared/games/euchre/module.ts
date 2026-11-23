@@ -3,6 +3,7 @@
 import { fail } from "../../common";
 import type { GameModule } from "../types";
 import { botMove } from "./bot";
+import { dealDuration } from "./deal";
 import * as E from "./engine";
 
 /** How long a finished trick stays on the table, and the hand summary before the next deal. */
@@ -103,7 +104,9 @@ export const euchre: GameModule<E.EuchreState, E.EuchreSettings, E.EuchreAction,
     if (!["bid1", "bid2", "discard", "play"].includes(s.phase)) return null;
     const cur = s.players[s.turn]!;
     if (!cur.bot) return null;
-    const delay = s.phase === "play" ? 750 + ctx.rng() * 650 : 900 + ctx.rng() * 800;
+    let delay = s.phase === "play" ? 750 + ctx.rng() * 650 : 900 + ctx.rng() * 800;
+    // The first bid of a hand waits for the TV to finish dealing, card by card.
+    if (s.phase === "bid1" && s.bids.every((b) => b === null)) delay += dealDuration(s.players.length);
     return { pid: cur.id, delay };
   },
   botActions(s, pid, ctx) {

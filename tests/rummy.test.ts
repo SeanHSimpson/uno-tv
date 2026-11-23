@@ -210,6 +210,55 @@ describe("turns", () => {
     expect(s.mayI).toEqual([]);
   });
 
+  it("May I? stays open after the current player draws from the deck, until they discard", () => {
+    const s = table([[c(3), c(9)], [c(4)], [c(5)]]);
+    s.stage = "draw";
+    s.lastDiscardBy = "p2";
+    const top = s.discard[s.discard.length - 1]!;
+    E.draw(s, "p0", "stock", Math.random);
+    expect(E.mayIOpen(s)).toBe("take");
+    expect(E.privateView(s, "p1")!.canMayI).toBe(true);
+    expect(E.privateView(s, "p2")!.canMayI).toBe(false); // their own discard
+    // The first to ask gets it straight away, plus a penalty card.
+    const ev = E.mayI(s, "p1", Math.random);
+    expect(ev.find((e) => e.type === "bought")).toMatchObject({ pid: "p1", card: top });
+    expect(s.players[1]!.hand).toHaveLength(3);
+    expect(s.players[1]!.buys).toBe(1);
+    // It's gone now: nothing left to ask for until the next discard.
+    expect(E.mayIOpen(s)).toBeNull();
+    expect(() => E.mayI(s, "p2", Math.random)).toThrow(/gone|nothing/);
+  });
+
+  it("May I? closes when the current player discards", () => {
+    const s = table([[c(3), c(9)], [c(4)], [c(5)]]);
+    s.stage = "draw";
+    E.draw(s, "p0", "stock", Math.random);
+    const card = s.players[0]!.hand[0]!;
+    E.discard(s, "p0", card.id);
+    // The new discard is p0's: p1 is now drawing, so it's the usual "ask before they draw".
+    expect(E.mayIOpen(s)).toBe("ask");
+    expect(() => E.mayI(s, "p0", Math.random)).toThrow(/own discard/);
+  });
+
+  it("May I? is closed for the rest of the turn if the current player takes the discard", () => {
+    const s = table([[c(3)], [c(4)], [c(5)]]);
+    s.stage = "draw";
+    E.draw(s, "p0", "discard", Math.random);
+    expect(E.mayIOpen(s)).toBeNull();
+    expect(E.privateView(s, "p1")!.canMayI).toBe(false);
+    expect(() => E.mayI(s, "p1", Math.random)).toThrow(/themselves|nothing/);
+  });
+
+  it("a card bought when the current player drew isn't up for another May I", () => {
+    const s = table([[c(3)], [c(4)], [c(5)]]);
+    s.stage = "draw";
+    s.discard.push(c(7));
+    E.mayI(s, "p1");
+    E.draw(s, "p0", "stock", Math.random);
+    // p1 got the 7; the card underneath was never passed on, so it's not up for grabs.
+    expect(E.mayIOpen(s)).toBeNull();
+  });
+
   it("lowest total after the last round wins", () => {
     const s = table([[c(3)], [c(4)]], { round: 7 });
     s.players[0]!.score = 80;
