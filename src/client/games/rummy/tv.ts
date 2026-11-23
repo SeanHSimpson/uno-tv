@@ -35,6 +35,11 @@ export function rummyTv(ctx: TvCtx): GameView {
     }));
   }
 
+  /** How long the deal animation lasts for `n` players (3 rounds of cards + final discard). */
+  function dealDuration(n: number) {
+    return 3 * n * 85 + 500;
+  }
+
   function update(snap: GameSnap<RummyPublic>) {
     state = snap.pub;
     render(snap.pub);
@@ -176,13 +181,12 @@ export function rummyTv(ctx: TvCtx): GameView {
   const spinOf = (c: PCard) => ((c.id * 47) % 34) - 17;
 
   /** The deal: card backs go round the table from the deck, a few each. */
-  function dealAnimation(first: string) {
+  function dealAnimation(first: string, retries = 1) {
     if (!state) return;
     const from = stockBox();
     if (!from || from.width < 8) {
-      // Layout still settling; try once more shortly.
-      setTimeout(() => alive && dealAnimation(first), 80);
-      return 0;
+      if (retries > 0) setTimeout(() => alive && dealAnimation(first, retries - 1), 80);
+      return;
     }
     const ps = state.players;
     const start = Math.max(0, ps.findIndex((p) => p.id === first));
@@ -196,7 +200,6 @@ export function rummyTv(ctx: TvCtx): GameView {
       }
     const discard = q("#rm-discard .pcard") as HTMLElement | null;
     if (discard) flyOnto(state.discardTop ?? null, from, discard, rounds * n * 85 + 150, -12);
-    return rounds * n * 85 + 500;
   }
 
   function react(events: RummyEvent[]) {
@@ -253,10 +256,11 @@ export function rummyTv(ctx: TvCtx): GameView {
   function animate(e: RummyEvent, delay: number): number {
     const meldCards = (id: number) => [...document.querySelectorAll<HTMLElement>(`[data-meld="${id}"] .pcard`)];
     switch (e.type) {
-      case "deal":
-        // Defer so the just-rendered boards have sizes.
-        afterLayout(() => dealAnimation(e.first));
-        return delay + 800;
+      case "deal": {
+        const dur = state ? dealDuration(state.players.length) : 800;
+        setTimeout(() => afterLayout(() => dealAnimation(e.first)), delay);
+        return delay + dur;
+      }
       case "draw": {
         const to = handOf(e.pid);
         const from = e.from === "discard" ? cardBox(q("#rm-discard"), q("#rm-stock .pcard")?.getBoundingClientRect().width ?? 60) : stockBox();
