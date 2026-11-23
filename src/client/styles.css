@@ -169,7 +169,9 @@ button {
   filter: none;
   margin-right: -0.8em;
 }
-.flyer {
+/* `body >` so it beats card rules defined later (Rummy and Euchre's `.pcard` is position: relative,
+   which dropped their flying cards below the bottom of the screen). */
+body > .flyer {
   position: fixed;
   z-index: 1000;
   pointer-events: none;
