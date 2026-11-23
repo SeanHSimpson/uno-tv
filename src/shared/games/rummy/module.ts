@@ -2,6 +2,7 @@
 
 import type { GameModule } from "../types";
 import { botTurn, botWantsMayI } from "./bot";
+import { dealDuration } from "./deal";
 import * as E from "./engine";
 
 export const rummy: GameModule<E.RummyState, E.RummySettings, E.RummyAction, E.RummyEvent> = {
@@ -87,12 +88,14 @@ export const rummy: GameModule<E.RummyState, E.RummySettings, E.RummyAction, E.R
   nextBot(s, ctx) {
     if (s.phase !== "playing") return null;
     const cur = s.players[s.turn]!;
+    // Right after a deal, nobody moves until the TV has dealt every card.
+    const wait = justDealt(s) ? dealDuration(s.players.length, s.players[0]!.hand.length) : 0;
     // A bot that isn't on turn may shout "May I?" before the current player draws.
     if (s.stage === "draw" && s.settings.mayI) {
       const buyer = s.players.find((p) => p.bot && p.id !== cur.id && botWantsMayI(s, p.id, ctx.rng));
-      if (buyer) return { pid: buyer.id, delay: 700 + ctx.rng() * 600 };
+      if (buyer) return { pid: buyer.id, delay: wait + 700 + ctx.rng() * 600 };
     }
-    if (cur.bot) return { pid: cur.id, delay: (s.stage === "draw" ? 1300 : 900) + ctx.rng() * 900 };
+    if (cur.bot) return { pid: cur.id, delay: wait + (s.stage === "draw" ? 1300 : 900) + ctx.rng() * 900 };
     return null;
   },
 
@@ -117,3 +120,9 @@ export const rummy: GameModule<E.RummyState, E.RummySettings, E.RummyAction, E.R
 
   tvActions: ["nextRound"],
 };
+
+/** The cards are just dealt: the first player hasn't drawn, nobody has bought or discarded. */
+function justDealt(s: E.RummyState) {
+  const n = s.players[0]?.hand.length ?? 0;
+  return s.stage === "draw" && s.discard.length === 1 && s.lastDiscardBy === null && s.melds.length === 0 && s.players.every((p) => p.hand.length === n);
+}

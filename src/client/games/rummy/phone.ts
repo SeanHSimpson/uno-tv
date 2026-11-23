@@ -7,10 +7,11 @@ import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
 import { attachReorder, fitHand, HandArranger, type SortMode } from "../../handArrange";
 import { pcardEl, pcardHtml, shortCard } from "../../playingCards";
-import { $, avatar, esc, toast } from "../../ui";
+import { $, avatar, esc, reducedMotion, toast } from "../../ui";
 import { tableSizeMenu } from "../tableSize";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
 import { NewCards } from "../../newCards";
+import { seatLandings } from "../../../shared/games/rummy/deal";
 
 export function rummyPhone(ctx: PhoneCtx): GameView {
   const pid = ctx.pid;
@@ -22,6 +23,9 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   // Cards that just came into your hand wear a "New" badge for a while.
   const fresh = new NewCards(() => me && renderHand());
   let wasMyTurn = false;
+  /** While the TV is dealing: when it started and when each of my cards lands on my board there. */
+  let dealing: { start: number; lands: number[] } | null = null;
+  let dealTimers: ReturnType<typeof setTimeout>[] = [];
   const rankOf = (c: PCard) => c.rank || 99;
   // Suit order everywhere: clubs, diamonds, spades, hearts (colors alternate); jokers last.
   const ROW_SUITS = ["C", "D", "S", "H"];
@@ -144,6 +148,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   }
 
   function update(snap: GameSnap<RummyPublic, RummyPrivate>) {
+    const receivedAt = performance.now();
     state = snap.pub;
     me = snap.me;
     if (me) fresh.update(me.hand.map((c) => c.id));
@@ -156,6 +161,9 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       audio.turn();
     }
     wasMyTurn = !!me?.myTurn;
+    // A deal (also the opening one, which arrives with the game screen): follow it on the TV.
+    const deal = (snap.events as RummyEvent[]).find((e) => e.type === "deal");
+    if (deal && deal.type === "deal") followDeal(deal.first, receivedAt);
     if (!snap.first) react(snap.events as RummyEvent[]);
     render();
     if ($("#rm-glance").classList.contains("open")) renderGlance();
@@ -191,11 +199,12 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
         <small>Discard · ${s.stockCount} in deck</small>
       </div>`;
 
-    $("#rm-drawbar").hidden = !m.canDraw;
+    // Nothing to do until all my cards have landed.
+    $("#rm-drawbar").hidden = !m.canDraw || !!dealing;
     const takeBtn = $("#rm-draw-discard") as HTMLButtonElement;
     takeBtn.disabled = !s.discardTop;
     takeBtn.innerHTML = s.discardTop ? `Take the ${shortCard(s.discardTop)}` : "Discard pile empty";
-    $("#rm-mayibar").hidden = !m.canMayI;
+    $("#rm-mayibar").hidden = !m.canMayI || !!dealing;
     $("#rm-mayi").innerHTML = s.discardTop ? `🙋 May I? Take the ${shortCard(s.discardTop)} (+1 penalty card, ${m.buysLeft} left)` : "";
 
     renderHand();
@@ -247,8 +256,9 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     const arranged = arranger.arrange(m.hand);
     // Reuse existing elements by ID (like OhNo) so draws/sorts don't rebuild the whole hand.
     const existing = new Map([...hand.querySelectorAll<HTMLElement>(":scope > .pcard")].map((el) => [Number(el.dataset.id), el]));
+    const shown = cardsLanded();
     hand.replaceChildren(
-      ...arranged.map((c) => {
+      ...arranged.map((c, i) => {
         let el = existing.get(c.id);
         if (el) {
           // Clear any leftover drag state (reorder uses style.translate).
@@ -258,6 +268,8 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
           el = pcardEl(c, "hand-card");
           el.setAttribute("role", "button");
         }
+        // During the deal a card appears when it lands on my board on the TV.
+        el.classList.toggle("deal-wait", i >= shown);
         el.classList.toggle("selected", selected.has(c.id));
         el.classList.toggle("just-drew", c.id === m.tookFromDiscard || fresh.isNew(c.id));
         el.setAttribute("aria-pressed", String(selected.has(c.id)));
@@ -266,6 +278,45 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     );
     // Also covers the deferred reorder.later and NewCards paths that call renderHand alone.
     layoutHand();
+  }
+
+  /** How many of my cards have landed on the TV so far (all of them when nobody's dealing). */
+  function cardsLanded() {
+    if (!dealing) return Infinity;
+    const t = performance.now() - dealing.start + 20; // timers can fire a hair early
+    return dealing.lands.filter((at) => at <= t).length;
+  }
+
+  /** Follow the TV's deal: show each of my cards as it lands on my board there (timing in shared/games/rummy/deal.ts). */
+  function followDeal(first: string, start: number) {
+    for (const t of dealTimers) clearTimeout(t);
+    dealTimers = [];
+    dealing = null;
+    const ps = state?.players ?? [];
+    const seat = ps.findIndex((p) => p.id === pid);
+    const f = ps.findIndex((p) => p.id === first);
+    if (seat < 0 || f < 0 || reducedMotion()) return;
+    const each = Math.min(...ps.map((p) => p.count));
+    const lands = seatLandings(ps.length, f, each, seat);
+    dealing = { start, lands };
+    const at = (ms: number) => Math.max(0, ms - (performance.now() - start));
+    dealTimers = lands.map((ms, k) =>
+      setTimeout(() => {
+        const el = hand.children[k] as HTMLElement | undefined;
+        if (el?.classList.contains("deal-wait")) {
+          el.classList.remove("deal-wait");
+          el.classList.add("deal-in");
+          haptic("select");
+        }
+      }, at(ms)),
+    );
+    dealTimers.push(
+      setTimeout(() => {
+        dealing = null;
+        // All my cards are in: show any still hidden, and the draw buttons.
+        render();
+      }, at((lands.at(-1) ?? 0) + 50)),
+    );
   }
 
   /** Same idea as OhNo!: size cards so the whole hand fits without scrolling. */
@@ -365,6 +416,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     },
     destroy() {
       fresh.stop();
+      for (const t of dealTimers) clearTimeout(t);
       ac.abort();
       document.body.classList.remove("my-turn");
       ctx.el.innerHTML = "";

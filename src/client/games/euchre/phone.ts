@@ -346,7 +346,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
   /** How many of my cards have landed on the TV so far (all of them when nobody's dealing). */
   function cardsLanded() {
     if (!dealing) return Infinity;
-    const t = performance.now() - dealing.start;
+    const t = performance.now() - dealing.start + 20; // timers can fire a hair early
     return dealing.lands.filter((at) => at <= t).length;
   }
 

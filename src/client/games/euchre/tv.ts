@@ -157,7 +157,7 @@ export function euchreTv(ctx: TvCtx): GameView {
   /** How many cards a seat shows: during the deal, only the ones that have landed. */
   function backsShown(seat: number, count: number) {
     if (!deal) return count;
-    const t = performance.now() - deal.start;
+    const t = performance.now() - deal.start + 20; // timers can fire a hair early
     const landed = deal.order.filter((s, i) => s === seat && landsAt(i) <= t).length;
     return Math.min(count, landed);
   }
@@ -293,17 +293,24 @@ export function euchreTv(ctx: TvCtx): GameView {
     const d = Math.max(0, ps.findIndex((p) => p.id === dealer));
     const order = dealOrder(ps.length, d);
     for (const t of dealTimers) clearTimeout(t);
+    dealTimers = [];
     deal = { start: performance.now(), order };
     order.forEach((seat, i) => {
       const r = document.getElementById(`eu-seat-${seat}`)?.getBoundingClientRect();
       if (!r) return;
       const to = new DOMRect(r.left + r.width / 2 - w * 0.4, r.top + r.height / 2 - w * 0.6, w * 0.8, w * 1.2);
-      fly(ecardEl(null), from, to, { delay: leavesAt(i), duration: DEAL_FLY, spin: (seat % 2 ? 1 : -1) * 25 });
+      // Made when it leaves the deck, so cards don't wait in a pile on top of it.
+      dealTimers.push(setTimeout(() => alive && fly(ecardEl(null), from, to, { duration: DEAL_FLY, spin: (seat % 2 ? 1 : -1) * 25 }), leavesAt(i)));
     });
     // Each seat's hand grows as its cards land.
-    dealTimers = order.map((_, i) => setTimeout(() => alive && state && renderSeats(state), landsAt(i)));
+    dealTimers.push(...order.map((_, i) => setTimeout(() => alive && state && renderSeats(state), landsAt(i))));
     const done = landsAt(order.length - 1);
-    dealTimers.push(setTimeout(() => (deal = null), done + 50));
+    dealTimers.push(
+      setTimeout(() => {
+        deal = null;
+        if (alive && state) renderSeats(state);
+      }, done + 50),
+    );
     if (state) renderSeats(state);
     // The turned-up card flips over last.
     document.querySelector("#eu-center .eu-upcard")?.animate([{ scale: "0 1", opacity: 0 }, { scale: "0 1", opacity: 0, offset: 0.01 }, { scale: "1 1", opacity: 1 }], { duration: 300, delay: done + 100, fill: "backwards" });

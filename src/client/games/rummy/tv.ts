@@ -6,6 +6,7 @@ import { confetti } from "../../fx";
 import type { PCard } from "../../../shared/games/rummy/cards";
 import { pcardEl, pcardHtml, shortCard } from "../../playingCards";
 import { $, avatar, esc, fly, reducedMotion } from "../../ui";
+import { DEAL_FLY, dealDuration, dealOrder, dealStep, landsAt, leavesAt, TURN_UP_FLY, turnUpAt } from "../../../shared/games/rummy/deal";
 import type { GameSnap, GameView, TvCtx } from "../types";
 
 export function rummyTv(ctx: TvCtx): GameView {
@@ -35,24 +36,24 @@ export function rummyTv(ctx: TvCtx): GameView {
     }));
   }
 
-  /** Rounds of cards dealt around the table before the discard lands. */
-  const DEAL_ROUNDS = 3;
-
-  /** How long the deal animation lasts for `n` players. */
-  function dealDuration(n: number) {
-    return DEAL_ROUNDS * n * 85 + 500;
-  }
+  /** While a deal is flying: when it started, the seat each card goes to and the time between cards. */
+  let deal: { start: number; order: number[]; step: number } | null = null;
+  let dealTimers: ReturnType<typeof setTimeout>[] = [];
+  /** When the latest update arrived: the deal's clock starts then, on the TV and on every phone. */
+  let receivedAt = 0;
+  /** The top of the discard pile before the latest update, shown under a card being discarded. */
+  let prevTop: PCard | null = null;
 
   function update(snap: GameSnap<RummyPublic>) {
+    receivedAt = performance.now();
+    prevTop = state?.discardTop ?? null;
     state = snap.pub;
     render(snap.pub);
     if (!snap.first) react(snap.events as RummyEvent[]);
     else {
-      // Opening deal: wait for layout so the stock and hand targets have real rects.
+      // The game screen appears with the opening deal itself.
       const deal = (snap.events as RummyEvent[]).find((e) => e.type === "deal");
-      if (deal && deal.type === "deal" && !reducedMotion()) {
-        afterLayout(() => dealAnimation(deal.first));
-      }
+      if (deal && deal.type === "deal" && !reducedMotion()) dealAnimation(deal.first);
     }
   }
 
@@ -66,14 +67,14 @@ export function rummyTv(ctx: TvCtx): GameView {
     const boards = $("#rm-boards");
     boards.style.setProperty("--n", String(s.players.length));
     boards.innerHTML = s.players
-      .map((p) => {
+      .map((p, i) => {
         const melds = s.melds.filter((m) => m.owner === p.id);
-        const fan = Math.min(p.count, 14);
+        const fan = Math.min(cardsShown(i, p.count), 14);
         return `<div class="rm-board ${s.turnId === p.id ? "turn" : ""} ${p.connected ? "" : "offline"}" data-pid="${esc(p.id)}">
           <div class="rm-head">
             ${avatar(p, "sm")}
             <div class="rm-who"><div class="rm-name"><b>${esc(p.name)}</b>${p.bot ? ' <span class="bot-tag">bot</span>' : ""}${p.id === s.hostId ? ' <i class="crown">♛</i>' : ""}</div>
-              <small>${p.count} card${p.count === 1 ? "" : "s"} · ${p.score} pts${p.buys ? ` · ${p.buys} May I` : ""}</small></div>
+              <small><span class="rm-count">${countText(cardsShown(i, p.count))}</span> · ${p.score} pts${p.buys ? ` · ${p.buys} May I` : ""}</small></div>
             ${p.partial ? `<span class="rm-part">Part down</span>` : ""}
             ${p.down ? `<span class="rm-down">✓ Down</span>` : `<span class="rm-fan">${Array.from({ length: fan }, () => "<i></i>").join("")}</span>`}
           </div>
@@ -92,6 +93,30 @@ export function rummyTv(ctx: TvCtx): GameView {
       $("#rm-turn").innerHTML = `${avatar(p, "sm")} <b>${esc(p.name)}</b> ${s.stage === "draw" ? "is drawing" : "is playing"}${p.connected ? "" : ` <span class="tag-off">(phone disconnected)</span>`}`;
     } else if (s.roundWinner) $("#rm-turn").innerHTML = `<b>${names(s.roundWinner)}</b> went out!`;
     renderResults(s);
+  }
+
+  const countText = (n: number) => `${n} card${n === 1 ? "" : "s"}`;
+
+  /** How many cards a player shows: during the deal, only the ones that have landed. */
+  function cardsShown(seat: number, count: number) {
+    if (!deal) return count;
+    // A timer can fire a hair before its time: count a card as landed just before it does.
+    const t = performance.now() - deal.start + 20;
+    const landed = deal.order.filter((s, i) => s === seat && landsAt(i, deal!.step) <= t).length;
+    return Math.min(count, landed);
+  }
+
+  /** During the deal: grow each player's fan of card backs as their cards land. */
+  function updateFans() {
+    if (!state) return;
+    state.players.forEach((p, i) => {
+      const b = boardOf(p.id);
+      const n = cardsShown(i, p.count);
+      const fan = b?.querySelector(".rm-fan");
+      if (fan && fan.childElementCount !== Math.min(n, 14)) fan.innerHTML = "<i></i>".repeat(Math.min(n, 14));
+      const c = b?.querySelector(".rm-count");
+      if (c) c.textContent = countText(n);
+    });
   }
 
   /** The host picks the card size; if that many groups won't fit, shrink until they do. */
@@ -176,40 +201,88 @@ export function rummyTv(ctx: TvCtx): GameView {
   const stockBox = () => q("#rm-stock .pcard")?.getBoundingClientRect() ?? null;
 
   /** Fly a card onto a card that's already drawn in place (hidden until it lands). */
-  function flyOnto(card: PCard | null, from: DOMRect | null, target: HTMLElement | null | undefined, delay: number, spin = 0) {
+  function flyOnto(card: PCard | null, from: DOMRect | null, target: HTMLElement | null | undefined, delay: number, spin = 0, duration = 520) {
     if (!from || !target) return;
     target.style.visibility = "hidden";
-    fly(pcardEl(card), from, target.getBoundingClientRect(), { delay, spin, duration: 520 }).then(() => (target.style.visibility = ""));
+    fly(pcardEl(card), from, target.getBoundingClientRect(), { delay, spin, duration }).then(() => (target.style.visibility = ""));
+  }
+
+  /** A discard: the card slides from the player's hand across to the pile. Until it lands, the pile
+   *  keeps showing the card that was on top before (or stays empty), so it never blinks out. */
+  function flyToDiscard(card: PCard, from: DOMRect | null, under: PCard | null, delay: number) {
+    const target = q("#rm-discard .pcard");
+    if (!from || !target) return;
+    const to = target.getBoundingClientRect();
+    const stand = under ? pcardEl(under, "rm-pile rm-top-discard") : null;
+    if (stand) target.replaceWith(stand);
+    else target.style.visibility = "hidden";
+    // Made when it leaves the hand, so a face-up card never waits there before its turn.
+    setTimeout(() => {
+      if (!alive) return;
+      fly(pcardEl(card), from, to, { spin: spinOf(card) - 30, duration: 700 }).then(() => {
+        if (stand?.isConnected) stand.replaceWith(target);
+        target.style.visibility = "";
+      });
+    }, delay);
   }
   const spinOf = (c: PCard) => ((c.id * 47) % 34) - 17;
 
-  /** The deal: card backs go round the table from the deck, a few each. */
-  function dealAnimation(first: string, retries = 1) {
+  /** The deal: one card at a time from the deck, round the table starting with the first player.
+   *  Each phone shows its card as it lands on that player's board (timing in shared/games/rummy/deal.ts). */
+  function dealAnimation(first: string) {
     if (!state) return;
-    const from = stockBox();
-    if (!from || from.width < 8) {
-      if (retries > 0) setTimeout(() => alive && dealAnimation(first, retries - 1), 80);
-      return;
-    }
+    const start = receivedAt;
     const ps = state.players;
-    const start = Math.max(0, ps.findIndex((p) => p.id === first));
-    const n = ps.length;
-    for (let k = 0; k < DEAL_ROUNDS; k++)
-      for (let j = 0; j < n; j++) {
-        const p = ps[(start + j) % n]!;
-        const to = handOf(p.id);
-        if (to) fly(pcardEl(null), from, to, { delay: (k * n + j) * 85, duration: 430, spin: (j % 2 ? 1 : -1) * 20 });
+    const seats = ps.length;
+    const each = Math.min(...ps.map((p) => p.count));
+    const step = dealStep(seats * each);
+    const order = dealOrder(seats, Math.max(0, ps.findIndex((p) => p.id === first)), each);
+    for (const t of dealTimers) clearTimeout(t);
+    deal = { start, order, step };
+    updateFans();
+    const at = (ms: number) => Math.max(0, ms - (performance.now() - start));
+    // Each player's fan grows as their cards land.
+    dealTimers = [...new Set(order.map((_, i) => landsAt(i, step)))].map((ms) => setTimeout(() => alive && updateFans(), at(ms)));
+    dealTimers.push(
+      setTimeout(() => {
+        deal = null;
+        if (alive) updateFans();
+      }, at(dealDuration(seats, each))),
+    );
+    // The turned-up card stays hidden until it lands on the discard pile.
+    const discard = q("#rm-discard .pcard");
+    if (discard) discard.style.visibility = "hidden";
+    // Wait for layout so the deck and the boards have their real sizes.
+    const go = (retries: number) => {
+      const from = stockBox();
+      if (!from || from.width < 8) {
+        if (retries > 0) setTimeout(() => alive && go(retries - 1), 80);
+        else if (discard) discard.style.visibility = "";
+        return;
       }
-    const discard = q("#rm-discard .pcard") as HTMLElement | null;
-    if (discard) flyOnto(state.discardTop ?? null, from, discard, DEAL_ROUNDS * n * 85 + 150, -12);
+      // Each card is made when it leaves the deck, so nothing waits in a pile on top of it
+      // (and the turned-up card can't be seen early).
+      order.forEach((seat, i) => {
+        const to = handOf(ps[seat]!.id);
+        const delay = at(leavesAt(i, step));
+        if (to && delay > 0) dealTimers.push(setTimeout(() => alive && fly(pcardEl(null), from, to, { duration: DEAL_FLY, spin: (seat % 2 ? 1 : -1) * 20 }), delay));
+      });
+      const top = state?.discardTop ?? null;
+      if (discard) dealTimers.push(setTimeout(() => alive && flyOnto(top, from, discard, 0, -12, TURN_UP_FLY), at(turnUpAt(seats, each))));
+    };
+    afterLayout(() => go(1));
   }
 
   function react(events: RummyEvent[]) {
     const log: string[] = [];
     const quick = reducedMotion();
     let delay = 0;
+    // What's on top of the discard pile as the events play out, to show under a new discard.
+    let top = prevTop;
     for (const e of events) {
-      if (!quick) delay = animate(e, delay);
+      if (!quick) delay = animate(e, delay, top);
+      if (e.type === "discard") top = e.card;
+      else if (e.type === "deal" || e.type === "reshuffle" || e.type === "bought" || (e.type === "draw" && e.from === "discard")) top = null;
       switch (e.type) {
         case "deal":
           audio.shuffle();
@@ -255,13 +328,14 @@ export function rummyTv(ctx: TvCtx): GameView {
   }
 
   /** Start this event's flying cards `delay` ms from now; returns when the next event's should start. */
-  function animate(e: RummyEvent, delay: number): number {
+  function animate(e: RummyEvent, delay: number, top: PCard | null): number {
     const meldCards = (id: number) => [...document.querySelectorAll<HTMLElement>(`[data-meld="${id}"] .pcard`)];
     switch (e.type) {
       case "deal": {
-        const dur = state ? dealDuration(state.players.length) : 800;
-        setTimeout(() => afterLayout(() => dealAnimation(e.first)), delay);
-        return delay + dur;
+        // The deal starts when it arrives (the phones count from then too), not after earlier events.
+        dealAnimation(e.first);
+        const ps = state?.players ?? [];
+        return Math.max(delay, ps.length ? dealDuration(ps.length, Math.min(...ps.map((p) => p.count))) : 0);
       }
       case "draw": {
         const to = handOf(e.pid);
@@ -294,8 +368,8 @@ export function rummyTv(ctx: TvCtx): GameView {
         return delay + e.cards.length * 90 + 250;
       }
       case "discard": {
-        flyFace(e.card, handOf(e.pid), q("#rm-discard .pcard") as HTMLElement | null, delay, spinOf(e.card) - 30);
-        return delay + 380;
+        flyToDiscard(e.card, handOf(e.pid), top, delay);
+        return delay + 450;
       }
       default:
         return delay;
@@ -313,6 +387,7 @@ export function rummyTv(ctx: TvCtx): GameView {
     },
     destroy() {
       alive = false;
+      for (const t of dealTimers) clearTimeout(t);
       ctx.el.innerHTML = "";
     },
   };
