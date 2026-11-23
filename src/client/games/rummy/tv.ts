@@ -28,14 +28,31 @@ export function rummyTv(ctx: TvCtx): GameView {
 
   const names = (pid: string) => esc(state?.players.find((p) => p.id === pid)?.name ?? "Someone");
 
+  /** Wait two animation frames so the just-rendered table has real sizes. */
+  function afterLayout(fn: () => void) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (alive) fn();
+    }));
+  }
+
+  /** Rounds of cards dealt around the table before the discard lands. */
+  const DEAL_ROUNDS = 3;
+
+  /** How long the deal animation lasts for `n` players. */
+  function dealDuration(n: number) {
+    return DEAL_ROUNDS * n * 85 + 500;
+  }
+
   function update(snap: GameSnap<RummyPublic>) {
     state = snap.pub;
     render(snap.pub);
     if (!snap.first) react(snap.events as RummyEvent[]);
     else {
-      // The game screen appears with the opening deal itself: deal it out once the table is drawn.
+      // Opening deal: wait for layout so the stock and hand targets have real rects.
       const deal = (snap.events as RummyEvent[]).find((e) => e.type === "deal");
-      if (deal && deal.type === "deal" && !reducedMotion()) setTimeout(() => alive && dealAnimation(deal.first), 60);
+      if (deal && deal.type === "deal" && !reducedMotion()) {
+        afterLayout(() => dealAnimation(deal.first));
+      }
     }
   }
 
@@ -167,23 +184,24 @@ export function rummyTv(ctx: TvCtx): GameView {
   const spinOf = (c: PCard) => ((c.id * 47) % 34) - 17;
 
   /** The deal: card backs go round the table from the deck, a few each. */
-  function dealAnimation(first: string) {
+  function dealAnimation(first: string, retries = 1) {
     if (!state) return;
     const from = stockBox();
-    if (!from) return;
+    if (!from || from.width < 8) {
+      if (retries > 0) setTimeout(() => alive && dealAnimation(first, retries - 1), 80);
+      return;
+    }
     const ps = state.players;
     const start = Math.max(0, ps.findIndex((p) => p.id === first));
     const n = ps.length;
-    const rounds = 3;
-    for (let k = 0; k < rounds; k++)
+    for (let k = 0; k < DEAL_ROUNDS; k++)
       for (let j = 0; j < n; j++) {
         const p = ps[(start + j) % n]!;
         const to = handOf(p.id);
         if (to) fly(pcardEl(null), from, to, { delay: (k * n + j) * 85, duration: 430, spin: (j % 2 ? 1 : -1) * 20 });
       }
     const discard = q("#rm-discard .pcard") as HTMLElement | null;
-    if (discard) flyOnto(state.discardTop ?? null, from, discard, rounds * n * 85 + 150, -12);
-    return rounds * n * 85 + 500;
+    if (discard) flyOnto(state.discardTop ?? null, from, discard, DEAL_ROUNDS * n * 85 + 150, -12);
   }
 
   function react(events: RummyEvent[]) {
@@ -240,8 +258,11 @@ export function rummyTv(ctx: TvCtx): GameView {
   function animate(e: RummyEvent, delay: number): number {
     const meldCards = (id: number) => [...document.querySelectorAll<HTMLElement>(`[data-meld="${id}"] .pcard`)];
     switch (e.type) {
-      case "deal":
-        return delay + (dealAnimation(e.first) ?? 0);
+      case "deal": {
+        const dur = state ? dealDuration(state.players.length) : 800;
+        setTimeout(() => afterLayout(() => dealAnimation(e.first)), delay);
+        return delay + dur;
+      }
       case "draw": {
         const to = handOf(e.pid);
         const from = e.from === "discard" ? cardBox(q("#rm-discard"), q("#rm-stock .pcard")?.getBoundingClientRect().width ?? 60) : stockBox();

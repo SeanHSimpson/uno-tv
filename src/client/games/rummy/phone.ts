@@ -244,16 +244,27 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       reorder.later(() => me && renderHand());
       return;
     }
+    const arranged = arranger.arrange(m.hand);
+    // Reuse existing elements by ID (like OhNo) so draws/sorts don't rebuild the whole hand.
+    const existing = new Map([...hand.querySelectorAll<HTMLElement>(":scope > .pcard")].map((el) => [Number(el.dataset.id), el]));
     hand.replaceChildren(
-      ...arranger.arrange(m.hand).map((c) => {
-        const el = pcardEl(c, "hand-card");
+      ...arranged.map((c) => {
+        let el = existing.get(c.id);
+        if (el) {
+          // Clear any leftover drag state (reorder uses style.translate).
+          el.style.translate = "";
+          el.classList.remove("reorder-drag");
+        } else {
+          el = pcardEl(c, "hand-card");
+          el.setAttribute("role", "button");
+        }
         el.classList.toggle("selected", selected.has(c.id));
         el.classList.toggle("just-drew", c.id === m.tookFromDiscard || fresh.isNew(c.id));
-        el.setAttribute("role", "button");
         el.setAttribute("aria-pressed", String(selected.has(c.id)));
         return el;
       }),
     );
+    // Also covers the deferred reorder.later and NewCards paths that call renderHand alone.
     layoutHand();
   }
 
