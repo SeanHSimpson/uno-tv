@@ -63,6 +63,12 @@ export interface GameModule<S = any, Settings = any, Action = any, Event = any> 
 
   /** "over" = finished (results showing), "abort" = can't continue (e.g. too few players). */
   status(state: S): GameStatus;
+  /** Player IDs who won the finished game (used for the room's game-night win tally). */
+  winners?(state: S): string[];
+  /** Current active turn for the optional room turn timer, or null if untimed/between rounds. */
+  activeTurn?(state: S): { pid: string; key: string } | null;
+  /** Auto-move executed when the optional turn timer expires for `pid`. */
+  timeout?(state: S, pid: string, ctx: ActionCtx): Event[];
   /** Actions the TV itself may send on the host's behalf (e.g. "next round" via the remote). */
   tvActions?: string[];
 }

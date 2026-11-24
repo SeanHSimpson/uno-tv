@@ -23,6 +23,8 @@ export interface Settings {
   targetScore: number;
   /** Cards drawn when caught without calling OhNo!. */
   catchPenalty: number;
+  /** Classic 7-0 rule: playing a 7 swaps hands with the next player; playing a 0 rotates everyone's hands. */
+  sevenZero: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -30,6 +32,7 @@ export const DEFAULT_SETTINGS: Settings = {
   drawUntilPlayable: false,
   targetScore: 0,
   catchPenalty: 2,
+  sevenZero: false,
 };
 
 export type Phase = "lobby" | "playing" | "roundOver";
@@ -82,6 +85,8 @@ export type GameEvent =
   | { type: "draw"; pid: string; count: number; reason: "auto" | "manual" | "penalty" | "caught" | "join" }
   | { type: "skip"; pid: string }
   | { type: "reverse"; direction: 1 | -1 }
+  | { type: "swap"; pid: string; withPid: string }
+  | { type: "rotate"; direction: 1 | -1 }
   | { type: "pass"; pid: string }
   | { type: "ohno"; pid: string }
   | { type: "caught"; pid: string; by: string; count: number }

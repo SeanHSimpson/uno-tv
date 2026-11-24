@@ -112,8 +112,8 @@ describe("starting, playing and ending", () => {
     const pub = JSON.stringify(R.gameView(r, null));
     expect(pub).not.toContain('"hand"');
     const mine = R.gameView(r, pid(r, "Ann"))!.me as { hand: unknown[] };
-    // 7 cards (or 9 if the first card turned over was a +2 and Ann went first).
-    expect([7, 9]).toContain(mine.hand.length);
+    // 7 cards (or 8 if Ann went first and auto-drew, or 9 if a +2 was turned up).
+    expect([7, 8, 9]).toContain(mine.hand.length);
   });
 
   it("someone joining mid-OhNo! is dealt in; names and pictures flow into the game", () => {
@@ -209,5 +209,90 @@ describe("bots through the room", () => {
       outcomes.add(phase);
     }
     expect(outcomes.size).toBeGreaterThan(0);
+  });
+
+  it("leave, transferHost, turnTimer, and session wins work cleanly", () => {
+    const r = lobby("Ann", "Bob", "Cat");
+    const ann = pid(r, "Ann");
+    const bob = pid(r, "Bob");
+    const cat = pid(r, "Cat");
+
+    R.transferHost(r, ann, bob);
+    expect(r.hostId).toBe(bob);
+    expect(() => R.transferHost(r, ann, cat)).toThrow(/host/);
+
+    R.setTurnTimer(r, bob, 30);
+    expect(r.turnTimer).toBe(30);
+    expect(() => R.setTurnTimer(r, bob, 45)).toThrow();
+
+    R.start(r, bob, seeded(7));
+    R.syncTurnTimer(r, 1000);
+    expect(r.turnDeadline).toBe(31_000);
+    const turn = R.activeTurn(r)!;
+    R.runTimeout(r, turn.pid, seeded(8));
+    expect(r.turnKey).toBeNull();
+
+    // Awarding session wins on game over (and never double-counting).
+    const g = r.game as GameState;
+    g.turn = 0;
+    g.color = "red";
+    g.discard.push({ id: 800, color: "red", value: "3" });
+    g.players[0]!.hand = [{ id: 801, color: "red", value: "5" }];
+    g.players[1]!.hand = [{ id: 802, color: "blue", value: "9" }];
+    g.players[2]!.hand = [{ id: 803, color: "green", value: "4" }];
+    R.gameAction(r, g.players[0]!.id, { t: "play", cardId: 801 }, seeded(9));
+    expect(r.members.find((m) => m.id === ann)?.wins).toBe(1);
+
+    // Voluntary leave hands host to a remaining player if host leaves.
+    R.leave(r, bob, seeded(10));
+    expect(r.members.map((m) => m.name)).toEqual(["Ann", "Cat"]);
+    expect(r.hostId).toBe(ann);
+  });
+
+  it("OhNo! 7-0 rule swaps hands on 7 and rotates hands on 0", () => {
+    const r = lobby("Ann", "Bob", "Cat");
+    const ann = pid(r, "Ann");
+    R.updateSettings(r, ann, "ohno", { sevenZero: true });
+    R.start(r, ann, seeded(3));
+    const g = r.game as GameState;
+    g.turn = 0;
+    g.direction = 1;
+    g.color = "red";
+    g.discard.push({ id: 900, color: "red", value: "3" });
+    g.players[0]!.hand = [
+      { id: 901, color: "red", value: "7" },
+      { id: 902, color: "blue", value: "2" },
+    ];
+    g.players[1]!.hand = [
+      { id: 903, color: "green", value: "5" },
+      { id: 904, color: "red", value: "0" },
+    ];
+    g.players[2]!.hand = [{ id: 905, color: "yellow", value: "9" }];
+
+    // Ann plays red 7 -> swaps remaining hand [902] with Bob [903, 904]
+    const ev7 = R.gameAction(r, g.players[0]!.id, { t: "play", cardId: 901 }, seeded(4)).game;
+    expect(ev7.some((e: any) => e.type === "swap")).toBe(true);
+    expect(g.players[0]!.hand.map((c) => c.id)).toEqual([903, 904]);
+    expect(g.players[1]!.hand.map((c) => c.id)).toContain(902);
+
+    // Bob plays red 0 -> rotates everyone's hands clockwise
+    g.turn = 1;
+    g.color = "red";
+    g.drawnCardId = null;
+    g.pendingDraw = 0;
+    g.players[0]!.hand = [{ id: 910, color: "blue", value: "1" }];
+    g.players[1]!.hand = [
+      { id: 911, color: "red", value: "0" },
+      { id: 912, color: "green", value: "4" },
+    ];
+    g.players[2]!.hand = [
+      { id: 913, color: "red", value: "8" },
+      { id: 914, color: "yellow", value: "6" },
+    ];
+    const ev0 = R.gameAction(r, g.players[1]!.id, { t: "play", cardId: 911 }, seeded(5)).game;
+    expect(ev0.some((e: any) => e.type === "rotate")).toBe(true);
+    expect(g.players[0]!.hand.map((c) => c.id)).toEqual([913, 914]);
+    expect(g.players[1]!.hand.map((c) => c.id)).toEqual([910]);
+    expect(g.players[2]!.hand.map((c) => c.id)).toContain(912);
   });
 });

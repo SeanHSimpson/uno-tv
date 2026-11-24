@@ -1,10 +1,11 @@
 // OhNo! on a phone: your hand, the pile, OhNo!/Catch, color picker and round results.
 
 import { COLORS, type Card, type Color, type GameEvent, type PrivateState, type PublicState } from "../../../shared/games/ohno/types";
-import { audio, haptic } from "../../audio";
+import { audio, haptic, loadPref, savePref } from "../../audio";
 import { byColor, byNumber, cardEl, COLOR_NAMES, shapeSvg, shortLabel } from "../../cards";
 import { attachReorder, HandArranger, type SortMode } from "../../handArrange";
 import { confetti } from "../../fx";
+import { icoBolt } from "../../icons";
 import { $, avatar, esc, fly, reducedMotion, toast } from "../../ui";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
 import { NewCards } from "../../newCards";
@@ -43,6 +44,7 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
   // Cards that just came into your hand (a draw, a penalty) wear a "New" badge for a while.
   const newCards = new NewCards(() => state && me && renderHand());
   let wasMyTurn = false;
+  let quickTap = loadPref("ohnoQuickTap", false);
   // Color (today's sort), Number, or Free (drag cards sideways to arrange them yourself).
   const arranger = new HandArranger<Card>(
     "ohno",
@@ -132,7 +134,18 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
   $("#oh-tools").addEventListener(
     "click",
     (e) => {
-      const b = (e.target as HTMLElement).closest<HTMLElement>("[data-sort]");
+      const t = e.target as HTMLElement;
+      const qt = t.closest<HTMLElement>("[data-quicktap]");
+      if (qt) {
+        quickTap = !quickTap;
+        savePref("ohnoQuickTap", quickTap);
+        selected = null;
+        haptic("select");
+        toast(quickTap ? "1-tap play on: tap a playable card to throw it right away." : "1-tap play off: tap twice or swipe up.");
+        renderHand();
+        return;
+      }
+      const b = t.closest<HTMLElement>("[data-sort]");
       if (!b) return;
       arranger.setMode(b.dataset.sort as SortMode);
       haptic("select");
@@ -157,7 +170,7 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
       return;
     }
     const el = (e.target as HTMLElement).closest<HTMLElement>(".card");
-    if (el) attempt(el, selected === Number(el.dataset.id));
+    if (el) attempt(el, quickTap || selected === Number(el.dataset.id));
   });
 
   // Swipe a card up (toward the TV) to play it.
@@ -275,7 +288,10 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
       prevHandIds = new Set();
       return;
     }
-    $("#oh-tools").innerHTML = arranger.toolbar({ fan: false });
+    $("#oh-tools").innerHTML = arranger.toolbar({ fan: false }).replace(
+      "</div>",
+      `</div><button class="tool-btn ${quickTap ? "on" : ""}" data-quicktap aria-pressed="${quickTap}" title="Play playable cards with a single tap">${icoBolt(14)} 1-tap</button>`,
+    );
     // Don't swap the cards out from under a finger that's on one (maybe starting a drag).
     if (reorder.holding()) {
       reorder.later(() => state && me && renderHand());
@@ -399,6 +415,8 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
       if (e.type === "caught" && e.by === pid) toast(`Gotcha! ${playerName(e.pid)} draws ${e.count}.`);
       if (e.type === "draw" && e.pid === pid && e.reason === "auto") toast(`Nothing to play — drew ${e.count === 1 ? "a card" : `${e.count} cards`}.`);
       if (e.type === "draw" && e.pid === pid && e.reason === "penalty") toast(`Ouch! +${e.count}`, "error");
+      if (e.type === "swap" && (e.pid === pid || e.withPid === pid)) toast(`Swapped hands with ${playerName(e.pid === pid ? e.withPid : e.pid)}!`);
+      if (e.type === "rotate") toast("Zero played — all hands rotated!");
     }
   }
 

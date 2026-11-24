@@ -130,5 +130,16 @@ export const euchre: GameModule<E.EuchreState, E.EuchreSettings, E.EuchreAction,
     if (s.players.every((p) => p.bot)) return "abort";
     return s.phase === "gameOver" ? "over" : "playing";
   },
+  winners(s) {
+    return s.phase === "gameOver" && s.winnerTeam !== null ? s.players.filter((_, i) => i % 2 === s.winnerTeam).map((p) => p.id) : [];
+  },
+  activeTurn(s) {
+    if (s.trickDone || !["bid1", "bid2", "discard", "play"].includes(s.phase)) return null;
+    const cur = s.players[s.turn];
+    return cur ? { pid: cur.id, key: `${s.hand}:${s.phase}:${s.turn}:${s.trick.length}:${s.bids.filter((b) => b !== null).length}` } : null;
+  },
+  timeout(s, pid, ctx) {
+    return euchre.botRescue!(s, pid, ctx);
+  },
   tvActions: ["restart", "deal"],
 };

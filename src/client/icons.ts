@@ -49,6 +49,24 @@ export const icoBot = (size = 17) =>
     size,
   );
 
+export const icoHelp = (size = 19) =>
+  svg(`<circle cx="12" cy="12" r="9.5"/><path d="M9.4 9.2a2.8 2.8 0 0 1 5.2 1.2c0 1.8-2.6 2.1-2.6 3.8"/><circle cx="12" cy="17.3" r="1" fill="currentColor" stroke="none"/>`, size);
+
+export const icoSmile = (size = 19) =>
+  svg(`<circle cx="12" cy="12" r="9.5"/><circle cx="9" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.1" fill="currentColor" stroke="none"/><path d="M8.5 14.5a4.2 4.2 0 0 0 7 0"/>`, size);
+
+export const icoNextTrack = (size = 16) =>
+  svg(`<path d="M5 5.5l9 6.5-9 6.5V5.5z" fill="currentColor" stroke="none"/><path d="M18 6v12" stroke-width="2.4"/>`, size);
+
+export const icoMusic = (size = 15) =>
+  svg(`<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5" fill="currentColor" stroke="none"/><circle cx="17.5" cy="16" r="2.5" fill="currentColor" stroke="none"/>`, size);
+
+export const icoBolt = (size = 14) =>
+  svg(`<path d="M13 2L4.5 13.5H12L11 22l8.5-11.5H12L13 2z" fill="currentColor" stroke="none"/>`, size);
+
+export const icoDoor = (size = 16) =>
+  svg(`<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>`, size);
+
 /** Handcrafted 36×36 emblem for each game in the hub picker. */
 export function gameEmblem(id: GameId, cls = "game-emblem"): string {
   switch (id) {

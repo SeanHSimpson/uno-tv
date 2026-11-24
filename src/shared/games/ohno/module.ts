@@ -23,6 +23,7 @@ export const ohno: GameModule<GameState, Settings, OhNoAction, GameEvent> = {
     { key: "stacking", label: "Stack +2 / +4", options: [{ value: false, label: "Off" }, { value: true, label: "On" }] },
     { key: "drawUntilPlayable", label: "When you can't play", options: [{ value: false, label: "Draw 1" }, { value: true, label: "Draw till playable" }] },
     { key: "catchPenalty", label: "Forgot OhNo! penalty", options: [{ value: 2, label: "+2" }, { value: 4, label: "+4" }] },
+    { key: "sevenZero", label: "7–0 hand swap", options: [{ value: false, label: "Off" }, { value: true, label: "On" }] },
   ],
   defaultSettings: { ...DEFAULT_SETTINGS },
 
@@ -115,6 +116,17 @@ export const ohno: GameModule<GameState, Settings, OhNoAction, GameEvent> = {
     if (s.phase === "lobby") return "abort"; // too few players left
     if (s.phase === "roundOver" && s.gameWinner) return "over";
     return "playing";
+  },
+  winners(s) {
+    return s.gameWinner ? [s.gameWinner] : [];
+  },
+  activeTurn(s) {
+    if (s.phase !== "playing") return null;
+    const cur = s.players[s.turn];
+    return cur ? { pid: cur.id, key: `${s.round}:${s.turn}:${s.discard.length}:${s.drawnCardId ?? ""}:${s.pendingDraw}` } : null;
+  },
+  timeout(s, pid, ctx) {
+    return ohno.botRescue!(s, pid, ctx);
   },
 
   tvActions: ["nextRound"],

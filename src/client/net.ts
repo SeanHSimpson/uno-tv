@@ -1,4 +1,5 @@
 import PartySocket from "partysocket";
+import type { EmoteId } from "../shared/common";
 import type { ClientMessage, ServerMessage } from "../shared/room";
 
 /** Everything a screen needs after each change in the room. */
@@ -6,6 +7,8 @@ export type Snapshot = Extract<ServerMessage, { t: "state" }>;
 
 export interface RoomHandlers {
   onState(s: Snapshot): void;
+  onEmote?(pid: string, emote: EmoteId): void;
+  onSkipTrack?(): void;
   onError(message: string): void;
   onFatal(message: string): void;
   onStatus(connected: boolean): void;
@@ -82,6 +85,8 @@ export function connectRoom(code: string, query: Record<string, string>, h: Room
       return;
     }
     if (msg.t === "state") h.onState(msg);
+    else if (msg.t === "emote") h.onEmote?.(msg.pid, msg.emote);
+    else if (msg.t === "skipTrack") h.onSkipTrack?.();
     else if (msg.t === "error") h.onError(msg.message);
     else if (msg.t === "fatal") {
       shutdown();

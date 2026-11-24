@@ -3,7 +3,7 @@
 import { GAME_ORDER, GAMES } from "../../shared/games";
 import type { GameId } from "../../shared/games/types";
 import type { RoomPublic } from "../../shared/room";
-import { gameEmblem } from "../icons";
+import { gameEmblem, icoNextTrack, icoTrophy } from "../icons";
 import { esc } from "../ui";
 
 export const playersText = (id: GameId) => {
@@ -56,5 +56,22 @@ export function tvAudioControls(room: RoomPublic): string {
     `<div class="setting"><span>${label}</span><div class="seg">${[true, false]
       .map((v) => `<button data-act="audio" data-key="${key}" data-val="${v}" class="${room.audio[key] === v ? "on" : ""}">${v ? "On" : "Off"}</button>`)
       .join("")}</div></div>`;
-  return `<div class="settings">${seg("tvMusic", "Music on the TV")}${seg("tvSounds", "Sound effects on the TV")}</div>`;
+  return `<div class="settings">${seg("tvMusic", "Music on the TV")}${seg("tvSounds", "Sound effects on the TV")}${
+    room.audio.tvMusic ? `<button class="btn btn-ghost btn-small wide" data-act="skipTrack">${icoNextTrack(15)} Next song on TV</button>` : ""
+  }</div>`;
+}
+
+export function turnTimerControl(room: RoomPublic): string {
+  const opts: [number, string][] = [
+    [0, "Off"],
+    [30, "30s"],
+    [60, "60s"],
+  ];
+  return `<div class="setting"><span>Turn timer</span><div class="seg">${opts
+    .map(([v, label]) => `<button data-act="turnTimer" data-val="${v}" class="${room.turnTimer === v ? "on" : ""}">${label}</button>`)
+    .join("")}</div></div>`;
+}
+
+export function winBadge(wins: number): string {
+  return wins > 0 ? `<span class="win-badge" title="${wins} game-night win${wins === 1 ? "" : "s"}">${icoTrophy("win-ico")} ${wins}</span>` : "";
 }

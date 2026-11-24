@@ -10,6 +10,18 @@ export const fail = (msg: string): never => {
 export const MAX_PLAYERS = 10;
 export const MAX_NAME = 14;
 
+/** Quick table reactions players can send from their phone to pop over their TV seat. */
+export const EMOTES = [
+  { id: "clap", icon: "👏", label: "Nice!" },
+  { id: "gasp", icon: "😱", label: "Whoa!" },
+  { id: "laugh", icon: "😂", label: "Haha!" },
+  { id: "fire", icon: "🔥", label: "On fire!" },
+  { id: "oof", icon: "😬", label: "Oof" },
+  { id: "gg", icon: "🎉", label: "GG!" },
+] as const;
+export type EmoteId = (typeof EMOTES)[number]["id"];
+export const isEmote = (x: unknown): x is EmoteId => EMOTES.some((e) => e.id === x);
+
 /** Pictures players can pick for their seat. */
 export const AVATARS = [
   "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐸", "🐵",
@@ -47,6 +59,8 @@ export interface Member {
   avatar?: string;
   bot?: boolean;
   connected: boolean;
+  /** Game-night wins earned in this room across all games. */
+  wins?: number;
 }
 
 /** Fields every game's public player list carries, so shared UI (avatars, names) works everywhere. */
@@ -57,6 +71,7 @@ export interface PublicMember {
   avatar: string | null;
   bot: boolean;
   connected: boolean;
+  wins: number;
 }
 
 export const publicMember = (m: Member): PublicMember => ({
@@ -66,4 +81,5 @@ export const publicMember = (m: Member): PublicMember => ({
   avatar: m.avatar ?? null,
   bot: !!m.bot,
   connected: m.connected,
+  wins: m.wins ?? 0,
 });

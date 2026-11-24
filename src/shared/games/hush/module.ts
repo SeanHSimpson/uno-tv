@@ -112,6 +112,9 @@ export const hush: GameModule<H.HushState, H.HushSettings, H.HushAction, H.HushE
     if (s.players.length < 2) return "abort";
     return s.phase === "won" || s.phase === "lost" ? "over" : "playing";
   },
+  winners(s) {
+    return s.phase === "won" ? s.players.map((p) => p.id) : [];
+  },
 
   tvActions: ["restart"],
 };

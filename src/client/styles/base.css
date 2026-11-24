@@ -592,6 +592,11 @@ kbd {
   font-style: normal;
   font-size: 0.85em;
 }
+.host-player-acts {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
 .host-player.offline {
   opacity: 0.6;
 }

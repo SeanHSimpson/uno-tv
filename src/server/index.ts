@@ -1,5 +1,5 @@
 import { getServerByName, routePartykitRequest, Server, type Connection, type ConnectionContext } from "partyserver";
-import { GameError } from "../shared/common";
+import { GameError, isEmote } from "../shared/common";
 import * as R from "../shared/room";
 
 type ConnState = { role: "tv" } | { role: "player"; pid: string };
@@ -55,6 +55,7 @@ export class Room extends Server<Env> {
       conn.setState({ role: "tv" });
       this.sync({ room: [], game: [] }, conn);
       this.scheduleBots(); // in case the room just woke up mid-game
+      this.scheduleTurnTimer();
       return;
     }
     const pid = (url.searchParams.get("pid") ?? "").slice(0, 64);
@@ -91,8 +92,26 @@ export class Room extends Server<Env> {
         else if (msg?.t === "game") res = R.tvAction(r, msg.action, Math.random);
         else return;
       } else {
+        if (msg?.t === "emote") {
+          if (!isEmote(msg.emote)) return;
+          const now = Date.now();
+          if (now - (this.lastEmote.get(st.pid) ?? 0) < 1200) return;
+          this.lastEmote.set(st.pid, now);
+          for (const tv of this.getConnections<ConnState>("tv")) this.send(tv, { t: "emote", pid: st.pid, emote: msg.emote });
+          return;
+        }
+        if (msg?.t === "skipTrack") {
+          if (r.hostId !== st.pid) return this.send(conn, { t: "error", message: "Only the host can do that." });
+          for (const tv of this.getConnections<ConnState>("tv")) this.send(tv, { t: "skipTrack" });
+          return;
+        }
         res = R.handle(r, st.pid, msg, Math.random);
         if (msg?.t === "kick") this.disconnectKicked(String(msg.pid));
+        if (msg?.t === "leave") {
+          await this.commit(res);
+          conn.close(4002, "left");
+          return;
+        }
       }
       await this.commit(res);
     } catch (err) {
@@ -152,17 +171,43 @@ export class Room extends Server<Env> {
 
   private async commit(res: R.Result) {
     if (!this.room) return;
+    R.syncTurnTimer(this.room, Date.now());
     this.room.seq++;
     await this.save();
     this.sync(res);
     this.scheduleBots();
+    this.scheduleTurnTimer();
   }
 
-  // ---------------- bots ----------------
+  // ---------------- bots & turn timer ----------------
   // Bots live inside the room: after every change we ask the game whether a bot should
   // act, and if so do it after a human-feeling pause. (A pending timer keeps the room awake.)
 
   private botTimer: ReturnType<typeof setTimeout> | null = null;
+  private turnTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastEmote = new Map<string, number>();
+
+  private scheduleTurnTimer() {
+    if (this.turnTimer) clearTimeout(this.turnTimer);
+    this.turnTimer = null;
+    const r = this.room;
+    if (!r || !r.turnDeadline) return;
+    const turn = R.activeTurn(r);
+    if (!turn) return;
+    const wait = Math.max(50, r.turnDeadline - Date.now());
+    const expectedKey = r.turnKey;
+    const pid = turn.pid;
+    this.turnTimer = setTimeout(() => {
+      this.turnTimer = null;
+      if (!this.room || this.room.turnKey !== expectedKey) return;
+      try {
+        const res = R.runTimeout(this.room, pid, Math.random);
+        this.commit(res).catch((err) => console.error("timeout commit error", err));
+      } catch (err) {
+        console.error("timeout error", err);
+      }
+    }, wait);
+  }
 
   private scheduleBots() {
     if (this.botTimer) clearTimeout(this.botTimer);

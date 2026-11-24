@@ -418,6 +418,30 @@ export function play(s: GameState, pid: string, cardId: number, chosen?: Color, 
     return events;
   }
 
+  // Optional 7-0 house rule: 0 rotates every hand in the direction of play; 7 swaps with the next player.
+  if (s.settings.sevenZero && s.players.length >= 2) {
+    if (card.value === "0") {
+      const hands = s.players.map((pl) => pl.hand);
+      const n = s.players.length;
+      for (let i = 0; i < n; i++) {
+        const to = (i + s.direction + n) % n;
+        s.players[to]!.hand = hands[i]!;
+        s.players[to]!.calledOhNo = false;
+      }
+      s.vulnerable = null;
+      events.push({ type: "rotate", direction: s.direction });
+    } else if (card.value === "7") {
+      const other = s.players[step(s, s.turn)]!;
+      const tmp = p.hand;
+      p.hand = other.hand;
+      other.hand = tmp;
+      p.calledOhNo = false;
+      other.calledOhNo = false;
+      if (s.vulnerable === p.id || s.vulnerable === other.id) s.vulnerable = null;
+      events.push({ type: "swap", pid: p.id, withPid: other.id });
+    }
+  }
+
   s.turn = step(s, s.turn, advance);
   beginTurn(s, rng, events);
   return events;

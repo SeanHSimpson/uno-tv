@@ -110,5 +110,16 @@ export const fizzle: GameModule<F.FizzleState, Record<string, never>, F.FizzleAc
     if (s.players.filter((p) => !p.waiting).length < 2 && s.phase === "playing") return "abort";
     return s.phase === "over" ? "over" : "playing";
   },
+  winners(s) {
+    return s.phase === "over" && s.winner ? [s.winner] : [];
+  },
+  activeTurn(s) {
+    if (s.phase !== "playing") return null;
+    const cur = F.currentPlayer(s);
+    return cur ? { pid: cur.id, key: `${s.turn}:${s.deck.length}:${s.discard.length}` } : null;
+  },
+  timeout(s, pid, ctx) {
+    return fizzle.botRescue!(s, pid, ctx);
+  },
   tvActions: ["restart"],
 };

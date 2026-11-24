@@ -232,6 +232,8 @@ export function ohnoTv(ctx: TvCtx): GameView {
         at(() => audio.skip());
         break;
       case "reverse":
+      case "swap":
+      case "rotate":
         at(() => audio.reverse());
         break;
       case "ohno":
@@ -300,6 +302,20 @@ export function ohnoTv(ctx: TvCtx): GameView {
             easing: "ease-in-out",
           });
           break;
+        case "swap":
+          bubble(e.pid, "Swapped!", "good", delay);
+          bubble(e.withPid, "Swapped!", "bad", delay);
+          delay += 300;
+          break;
+        case "rotate":
+          $("#ring").animate([{ transform: "rotate(0deg) scale(1)" }, { transform: `rotate(${e.direction === 1 ? 360 : -360}deg) scale(1.08)` }, { transform: "rotate(0) scale(1)" }], {
+            duration: 950,
+            delay,
+            easing: "ease-in-out",
+          });
+          if (state) for (const p of state.players) bubble(p.id, "Pass hands!", "good", delay);
+          delay += 350;
+          break;
         case "ohno":
           bubble(e.pid, "OhNo!", "good", delay);
           break;
@@ -333,6 +349,10 @@ export function ohnoTv(ctx: TvCtx): GameView {
         return `${n(e.pid)} is skipped`;
       case "reverse":
         return `Reversed — now going ${e.direction === 1 ? "↻ clockwise" : "↺ counter-clockwise"}`;
+      case "swap":
+        return `${n(e.pid)} swapped hands with ${n(e.withPid)}!`;
+      case "rotate":
+        return `Zero played — everyone passed hands ${e.direction === 1 ? "clockwise" : "counter-clockwise"}!`;
       case "ohno":
         return `${n(e.pid)} called OhNo!`;
       case "caught":

@@ -117,6 +117,23 @@ export const rummy: GameModule<E.RummyState, E.RummySettings, E.RummyAction, E.R
     if (s.players.length < 2) return "abort";
     return s.phase === "gameOver" ? "over" : "playing";
   },
+  winners(s) {
+    if (s.phase !== "gameOver" || !s.players.length) return [];
+    const best = Math.min(...s.players.map((p) => p.score));
+    return s.players.filter((p) => p.score === best).map((p) => p.id);
+  },
+  activeTurn(s) {
+    if (s.phase !== "playing") return null;
+    const cur = s.players[s.turn];
+    return cur ? { pid: cur.id, key: `${s.round}:${s.turn}:${s.stage}:${s.discard.length}` } : null;
+  },
+  timeout(s, pid, ctx) {
+    const ev = rummy.botRescue!(s, pid, ctx);
+    if (s.phase === "playing" && s.players[s.turn]?.id === pid && s.stage === "play") {
+      ev.push(...rummy.botRescue!(s, pid, ctx));
+    }
+    return ev;
+  },
 
   tvActions: ["nextRound"],
 };

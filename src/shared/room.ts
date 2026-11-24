@@ -1,9 +1,11 @@
 // The room: who's here, who hosts, which game, and the running game's state.
 // Pure logic (no I/O) so it's unit-testable; the Durable Object wraps it.
 
-import { cleanAvatar, cleanName, fail, GameError, MAX_PLAYERS, publicMember, type Member, type PublicMember, type Rng } from "./common";
+import { cleanAvatar, cleanName, fail, GameError, MAX_PLAYERS, publicMember, type EmoteId, type Member, type PublicMember, type Rng } from "./common";
 import { GAMES, isGameId } from "./games";
 import type { ActionCtx, GameId } from "./games/types";
+
+export type TurnTimerOption = 0 | 30 | 60;
 
 export interface RoomState {
   version: 2;
@@ -13,6 +15,11 @@ export interface RoomState {
   gameId: GameId;
   settings: Partial<Record<GameId, Record<string, unknown>>>;
   audio: { tvMusic: boolean; tvSounds: boolean };
+  /** Optional per-turn countdown in seconds (0 = off). */
+  turnTimer?: TurnTimerOption;
+  turnKey?: string | null;
+  turnDeadline?: number | null;
+  winAwarded?: boolean;
   phase: "lobby" | "game";
   /** State of the running game module (null in the lobby). */
   game: unknown;
@@ -42,6 +49,10 @@ export function newRoom(code: string): RoomState {
     gameId: "ohno",
     settings: {},
     audio: { tvMusic: true, tvSounds: true },
+    turnTimer: 0,
+    turnKey: null,
+    turnDeadline: null,
+    winAwarded: false,
     phase: "lobby",
     game: null,
     notice: null,
@@ -76,13 +87,29 @@ function syncGame(r: RoomState) {
   if (r.phase === "game" && r.game) mod(r).sync(r.game, r.members, r.hostId);
 }
 
-/** After anything touches the game: if it can't continue, go back to the lobby. */
+/** After anything touches the game: award session wins when over, or return to lobby on abort. */
 function settle(r: RoomState, res: Result): Result {
-  if (r.phase === "game" && r.game && mod(r).status(r.game) === "abort") {
-    r.phase = "lobby";
-    r.game = null;
-    r.notice = "Not enough players left to keep going, so we're back in the lobby.";
-    res.room.push({ type: "ended", reason: r.notice });
+  if (r.phase === "game" && r.game) {
+    const st = mod(r).status(r.game);
+    if (st === "abort") {
+      r.phase = "lobby";
+      r.game = null;
+      r.winAwarded = false;
+      r.turnKey = null;
+      r.turnDeadline = null;
+      r.notice = "Not enough players left to keep going, so we're back in the lobby.";
+      res.room.push({ type: "ended", reason: r.notice });
+    } else if (st === "over") {
+      if (!r.winAwarded) {
+        r.winAwarded = true;
+        for (const wid of mod(r).winners?.(r.game) ?? []) {
+          const m = r.members.find((x) => x.id === wid);
+          if (m) m.wins = (m.wins ?? 0) + 1;
+        }
+      }
+    } else {
+      r.winAwarded = false;
+    }
   }
   return res;
 }
@@ -153,6 +180,32 @@ export function kick(r: RoomState, by: string, pid: string, rng: Rng): Result {
   return remove(r, pid, true, rng);
 }
 
+/** A player leaves the room voluntarily. */
+export function leave(r: RoomState, pid: string, rng: Rng): Result {
+  return remove(r, pid, false, rng);
+}
+
+/** Hand the host crown to another human player in the room. */
+export function transferHost(r: RoomState, by: string, toPid: string): Result {
+  requireHost(r, by);
+  const target = member(r, toPid);
+  if (target.bot) fail("Bots can't be the host.");
+  if (!target.connected) fail(`${target.name} is offline right now.`);
+  r.hostId = target.id;
+  syncGame(r);
+  return none();
+}
+
+export function setTurnTimer(r: RoomState, by: string, seconds: unknown): Result {
+  requireHost(r, by);
+  const n = Number(seconds);
+  if (n !== 0 && n !== 30 && n !== 60) fail("Pick Off, 30s, or 60s.");
+  r.turnTimer = n as TurnTimerOption;
+  r.turnKey = null;
+  r.turnDeadline = null;
+  return none();
+}
+
 export function setAvatar(r: RoomState, pid: string, raw: unknown): Result {
   const avatar = cleanAvatar(raw);
   if (!avatar) fail("Pick one of the pictures.");
@@ -204,6 +257,9 @@ export function start(r: RoomState, by: string, rng: Rng): Result {
   const { state, events } = m.start(players, settingsFor(r), ctx(r, by, rng));
   r.game = state;
   r.phase = "game";
+  r.winAwarded = false;
+  r.turnKey = null;
+  r.turnDeadline = null;
   r.notice = null;
   return settle(r, { room: [{ type: "started", gameId: r.gameId }], game: events });
 }
@@ -213,6 +269,9 @@ export function endGame(r: RoomState, by: string): Result {
   if (r.phase !== "game") return none();
   r.phase = "lobby";
   r.game = null;
+  r.winAwarded = false;
+  r.turnKey = null;
+  r.turnDeadline = null;
   // Anyone whose phone left during the game gives up their seat now.
   const gone = r.members.filter((m) => !m.connected && !m.bot).map((m) => m.id);
   const res: Result = { room: [{ type: "ended", reason: null }], game: [] };
@@ -242,6 +301,42 @@ export function tvAction(r: RoomState, action: unknown, rng: Rng): Result {
 export function nextBot(r: RoomState, rng: Rng) {
   if (r.phase !== "game" || !r.game) return null;
   return mod(r).nextBot(r.game, ctx(r, null, rng));
+}
+
+/** Update turnDeadline whenever the active human turn changes (for the optional turn timer). */
+export function syncTurnTimer(r: RoomState, now: number) {
+  const sec = r.turnTimer ?? 0;
+  if (!sec || r.phase !== "game" || !r.game) {
+    r.turnKey = null;
+    r.turnDeadline = null;
+    return;
+  }
+  const turn = mod(r).activeTurn?.(r.game) ?? null;
+  const m = turn ? r.members.find((x) => x.id === turn.pid) : undefined;
+  if (!turn || !m || m.bot) {
+    r.turnKey = null;
+    r.turnDeadline = null;
+    return;
+  }
+  if (turn.key !== r.turnKey || !r.turnDeadline) {
+    r.turnKey = turn.key;
+    r.turnDeadline = now + sec * 1000;
+  }
+}
+
+export function activeTurn(r: RoomState) {
+  if (r.phase !== "game" || !r.game) return null;
+  return mod(r).activeTurn?.(r.game) ?? null;
+}
+
+export function runTimeout(r: RoomState, pid: string, rng: Rng): Result {
+  if (r.phase !== "game" || !r.game) return none();
+  const m = mod(r);
+  if (!m.timeout) return none();
+  const ev = m.timeout(r.game, pid, ctx(r, pid, rng));
+  r.turnKey = null;
+  r.turnDeadline = null;
+  return settle(r, { room: [], game: ev });
 }
 
 export function runBot(r: RoomState, pid: string, rng: Rng): Result {
@@ -274,6 +369,8 @@ export interface RoomPublic {
   gameId: GameId;
   settings: Record<string, unknown>;
   audio: { tvMusic: boolean; tvSounds: boolean };
+  turnTimer: TurnTimerOption;
+  turnDeadline: number | null;
   phase: "lobby" | "game";
   notice: string | null;
   seq: number;
@@ -287,6 +384,8 @@ export function roomView(r: RoomState): RoomPublic {
     gameId: r.gameId,
     settings: settingsFor(r),
     audio: r.audio,
+    turnTimer: r.turnTimer ?? 0,
+    turnDeadline: r.turnDeadline ?? null,
     phase: r.phase,
     notice: r.notice,
     seq: r.seq,
@@ -305,11 +404,16 @@ export type ClientMessage =
   | { t: "selectGame"; gameId: GameId }
   | { t: "settings"; gameId: GameId; settings: Record<string, unknown> }
   | { t: "audio"; audio: { tvMusic?: boolean; tvSounds?: boolean } }
+  | { t: "turnTimer"; seconds: number }
   | { t: "start" }
   | { t: "endGame" }
   | { t: "addBot" }
   | { t: "kick"; pid: string }
+  | { t: "leave" }
+  | { t: "transferHost"; pid: string }
   | { t: "avatar"; avatar: string }
+  | { t: "emote"; emote: EmoteId }
+  | { t: "skipTrack" }
   | { t: "game"; action: unknown };
 
 export type ServerMessage =
@@ -319,6 +423,8 @@ export type ServerMessage =
       game: { id: GameId; pub: unknown; me: unknown } | null;
       events: Result;
     }
+  | { t: "emote"; pid: string; emote: EmoteId }
+  | { t: "skipTrack" }
   | { t: "error"; message: string }
   | { t: "fatal"; message: string };
 
@@ -331,6 +437,8 @@ export function handle(r: RoomState, pid: string, m: ClientMessage, rng: Rng): R
       return updateSettings(r, pid, m.gameId, m.settings);
     case "audio":
       return setAudio(r, pid, m.audio);
+    case "turnTimer":
+      return setTurnTimer(r, pid, m.seconds);
     case "start":
       return start(r, pid, rng);
     case "endGame":
@@ -339,6 +447,10 @@ export function handle(r: RoomState, pid: string, m: ClientMessage, rng: Rng): R
       return addBot(r, pid, rng);
     case "kick":
       return kick(r, pid, String(m.pid), rng);
+    case "leave":
+      return leave(r, pid, rng);
+    case "transferHost":
+      return transferHost(r, pid, String(m.pid));
     case "avatar":
       return setAvatar(r, pid, m.avatar);
     case "game":

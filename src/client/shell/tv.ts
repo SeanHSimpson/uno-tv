@@ -1,16 +1,18 @@
 // The TV: header, the hub lobby (pick a game, QR code), music, and whichever game is running.
 
 import QRCode from "qrcode";
+import { EMOTES, type EmoteId } from "../../shared/common";
 import { GAMES } from "../../shared/games";
 import type { GameId } from "../../shared/games/types";
 import type { RoomPublic } from "../../shared/room";
 import { audio, loadPref, savePref, unlockOnFirstGesture } from "../audio";
 import { SCREENS } from "../games";
 import type { GameView } from "../games/types";
-import { gameEmblem, icoCrown, icoSound } from "../icons";
+import { gameEmblem, icoClose, icoCrown, icoMusic, icoSound } from "../icons";
 import { connectRoom, type Snapshot } from "../net";
+import { rulesBodyHtml } from "../rules";
 import { $, avatar, esc, joinOrigin, keepAwake, toast } from "../ui";
-import { gameCards, playersText, settingsChips } from "./common";
+import { gameCards, playersText, settingsChips, winBadge } from "./common";
 
 export function mountTv(root: HTMLElement, code: string) {
   const joinUrl = `${joinOrigin()}/?join=${code}`;
@@ -21,6 +23,7 @@ export function mountTv(root: HTMLElement, code: string) {
     <header class="tv-top">
       <div class="logo">Oh<span>No!</span></div>
       <div class="tv-round" id="tv-status"></div>
+      <div class="tv-timer" id="tv-timer" hidden></div>
       <button class="sound-btn" id="tv-sound" title="Sound on/off (M)" aria-label="Sound on/off">${icoSound(true, 22)}</button>
       <div class="tv-join">
         <div class="qr qr-mini" id="qr-mini"></div>
@@ -48,6 +51,8 @@ export function mountTv(root: HTMLElement, code: string) {
         </div>
       </div>
     </section>
+    <section class="tv-rules overlay" id="tv-rules" hidden></section>
+    <div class="now-playing" id="now-playing" aria-live="polite"></div>
     <div class="conn-lost" id="conn-lost" hidden>Reconnecting…</div>
     <button class="tap-sound" id="tap-sound" hidden>${icoSound(true, 18)} Click anywhere for music &amp; sound</button>
   </div>`;
@@ -63,6 +68,8 @@ export function mountTv(root: HTMLElement, code: string) {
 
   const conn = connectRoom(code, { role: "tv" }, {
     onState: handle,
+    onEmote: showEmote,
+    onSkipTrack: () => audio.skipSong(),
     onError: (m) => toast(m, "error"),
     onFatal(m) {
       view?.destroy();
@@ -102,6 +109,7 @@ export function mountTv(root: HTMLElement, code: string) {
     }
     for (const e of snap.events.room) if (e.type === "joined") audio.pop();
     syncAudio();
+    syncTimer();
   }
 
   function renderLobby(r: RoomPublic) {
@@ -111,7 +119,10 @@ export function mountTv(root: HTMLElement, code: string) {
     $("#hub-howto").innerHTML = `<span class="howto-emblem">${gameEmblem(r.gameId)}</span><b>${esc(meta.name)}:</b> ${esc(meta.howTo)}`;
     $("#lobby-players").innerHTML = r.members.length
       ? r.members
-          .map((p) => `<div class="lobby-player">${avatar(p)}<span>${esc(p.name)}${p.id === r.hostId ? ` ${icoCrown()}` : ""}</span></div>`)
+          .map(
+            (p) =>
+              `<div class="lobby-player" data-pid="${esc(p.id)}">${avatar(p)}<span>${esc(p.name)}${p.id === r.hostId ? ` ${icoCrown()}` : ""}</span>${winBadge(p.wins)}</div>`,
+          )
           .join("")
       : `<div class="lobby-empty">Nobody here yet…</div>`;
     const host = r.members.find((p) => p.id === r.hostId);
@@ -126,14 +137,91 @@ export function mountTv(root: HTMLElement, code: string) {
     const start = $("#tv-start");
     start.hidden = !enough;
     start.textContent = `Start ${meta.name}`;
-    $("#lobby-rules").innerHTML = settingsChips(r);
+    const timerChip = r.turnTimer ? `<span>Turn timer: <b>${r.turnTimer}s</b></span>` : "";
+    $("#lobby-rules").innerHTML = settingsChips(r) + timerChip;
   }
+
+  // ---------------- emotes, turn timer, rules, now playing ----------------
+
+  function showEmote(pid: string, emoteId: EmoteId) {
+    const em = EMOTES.find((x) => x.id === emoteId);
+    if (!em) return;
+    audio.pop();
+    const target = root.querySelector<HTMLElement>(`[data-pid="${CSS.escape(pid)}"]`);
+    const b = document.createElement("div");
+    b.className = "emote-bubble";
+    b.innerHTML = `<span>${em.icon}</span><small>${esc(em.label)}</small>`;
+    if (target) {
+      target.append(b);
+    } else {
+      const who = room?.members.find((m) => m.id === pid)?.name;
+      if (who) b.innerHTML = `<span>${em.icon}</span><small>${esc(who)}: ${esc(em.label)}</small>`;
+      b.classList.add("emote-float");
+      root.append(b);
+    }
+    setTimeout(() => b.remove(), 2200);
+  }
+
+  let timerHandle = 0;
+  function syncTimer() {
+    clearInterval(timerHandle);
+    timerHandle = 0;
+    const el = $("#tv-timer");
+    const deadline = room?.turnDeadline;
+    const total = (room?.turnTimer ?? 0) * 1000;
+    if (!deadline || !total) {
+      el.hidden = true;
+      return;
+    }
+    const draw = () => {
+      const left = Math.max(0, deadline - Date.now());
+      const sec = Math.ceil(left / 1000);
+      const pct = Math.max(0, Math.min(1, left / total));
+      const dash = (pct * 75.4).toFixed(1);
+      el.hidden = false;
+      el.classList.toggle("urgent", sec <= 10);
+      el.innerHTML = `<svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="12" class="tt-bg"/><circle cx="14" cy="14" r="12" class="tt-arc" stroke-dasharray="${dash} 75.4"/></svg><span>${sec}s</span>`;
+    };
+    draw();
+    timerHandle = window.setInterval(draw, 200);
+  }
+
+  let trackTimer = 0;
+  audio.onTrackChange((track) => {
+    const el = $("#now-playing");
+    clearTimeout(trackTimer);
+    if (!track) {
+      el.classList.remove("show");
+      return;
+    }
+    el.innerHTML = `${icoMusic(15)}<span><b>${esc(track.name)}</b> · ${esc(track.composer)}</span>`;
+    el.classList.add("show");
+    trackTimer = window.setTimeout(() => el.classList.remove("show"), 5200);
+  });
+
+  function toggleRules(force?: boolean) {
+    const el = $("#tv-rules");
+    const open = force ?? el.hidden;
+    if (!open || !room) {
+      el.hidden = true;
+      return;
+    }
+    el.innerHTML = `<div class="rules-modal">${rulesBodyHtml(room.gameId, room.settings)}<button class="btn btn-ghost rules-close" id="tv-rules-close">${icoClose(16)} Close <small>(?)</small></button></div>`;
+    el.hidden = false;
+    $("#tv-rules-close").addEventListener("click", () => (el.hidden = true));
+  }
+  $("#tv-rules").addEventListener("click", (e) => {
+    if (e.target === $("#tv-rules")) $("#tv-rules").hidden = true;
+  });
 
   // ---------------- controls ----------------
 
   $("#tv-start").addEventListener("click", () => conn.send({ t: "start" }));
   document.addEventListener("keydown", (e) => {
     if (e.key === "m" || e.key === "M") return toggleMute();
+    if (e.key === "n" || e.key === "N") return audio.skipSong();
+    if (e.key === "?" || e.key === "/") return toggleRules();
+    if (e.key === "Escape" && !$("#tv-rules").hidden) return toggleRules(false);
     if (e.key !== "Enter" && e.key !== " ") return;
     if (room?.phase === "lobby") {
       if (room.members.length >= GAMES[room.gameId].meta.minPlayers) conn.send({ t: "start" });
