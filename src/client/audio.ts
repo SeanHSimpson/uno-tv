@@ -2,9 +2,7 @@
 // The music (complete public-domain pieces) lives in ./songs.ts.
 
 import { PIANO_FILES, PIANO_NOTES, pianoSample } from "./piano";
-import { SONGS, type MusicEvent, type Song } from "./songs";
-
-export { SONGS };
+import type { MusicEvent, Song } from "./songs";
 
 const hz = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
 const compile = (song: Song) => song.build();
@@ -20,10 +18,13 @@ class AudioEngine {
   private mode: "calm" | "game" | null = null;
   private held = false;
   private timer = 0;
+  private songs: Song[] | null = null;
+  private songsPromise: Promise<Song[]> | null = null;
+  private pianoLoaded = false;
   private playlist: Song[] = [];
   private songIdx = 0;
   private loops = 0;
-  private compiled = compile(SONGS[0]!);
+  private compiled: { events: MusicEvent[]; length: number } = { events: [], length: 0 };
   private cursor = 0;
   private cursorBeat = 0;
   private cursorTime = 0;
@@ -95,7 +96,6 @@ class AudioEngine {
     const hallWet = ctx.createGain();
     hallWet.gain.value = 0.28;
     this.musicBus.connect(hall).connect(hallWet).connect(this.master);
-    this.loadPiano();
     this.sfxBus = ctx.createGain();
     this.sfxBus.gain.value = 0.9;
     this.sfxBus.connect(this.master);
@@ -121,16 +121,31 @@ class AudioEngine {
       g.linearRampToValueAtTime(0, now + 0.6);
       return;
     }
-    g.setValueAtTime(0, now + 0.05);
-    g.linearRampToValueAtTime(this.level(), now + 1.5);
-    this.playlist = SONGS.filter((x) => x.mode === mode);
-    this.songIdx = Math.floor(Math.random() * this.playlist.length);
-    this.loops = 0;
-    this.compiled = compile(this.playlist[this.songIdx]!);
-    this.cursor = 0;
-    this.cursorBeat = 0;
-    this.cursorTime = now + 0.15;
-    this.timer = window.setInterval(() => this.schedule(), 50);
+    if (!this.pianoLoaded) {
+      this.pianoLoaded = true;
+      this.loadPiano();
+    }
+    const startWith = (all: Song[]) => {
+      if (!this.ctx || this.mode !== mode) return;
+      const t = this.ctx.currentTime;
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(0, t + 0.05);
+      g.linearRampToValueAtTime(this.level(), t + 1.5);
+      this.playlist = all.filter((x) => x.mode === mode);
+      this.songIdx = Math.floor(Math.random() * this.playlist.length);
+      this.loops = 0;
+      this.compiled = compile(this.playlist[this.songIdx]!);
+      this.cursor = 0;
+      this.cursorBeat = 0;
+      this.cursorTime = t + 0.15;
+      clearInterval(this.timer);
+      this.timer = window.setInterval(() => this.schedule(), 50);
+    };
+    if (this.songs) startWith(this.songs);
+    else {
+      this.songsPromise ??= import("./songs").then((m) => (this.songs = m.SONGS));
+      void this.songsPromise.then(startWith).catch(() => {});
+    }
   }
 
   private level() {
