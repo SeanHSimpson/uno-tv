@@ -2,7 +2,8 @@
 // The music (complete public-domain pieces) lives in ./songs.ts.
 
 import { PIANO_FILES, PIANO_NOTES, pianoSample } from "./piano";
-import type { MusicEvent, Song } from "./songs";
+import type { MusicEvent, Song } from "./songBuilder";
+import { SONG_CATALOG, type SongEntry } from "./songCatalog";
 
 const hz = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
 const compile = (song: Song) => song.build();
@@ -18,12 +19,11 @@ class AudioEngine {
   private mode: "calm" | "game" | null = null;
   private held = false;
   private timer = 0;
-  private songs: Song[] | null = null;
-  private songsPromise: Promise<Song[]> | null = null;
   private pianoLoaded = false;
-  private playlist: Song[] = [];
+  private playlist: SongEntry[] = [];
   private songIdx = 0;
-  private loops = 0;
+  private songGen = 0;
+  private activeSong: Song | null = null;
   private compiled: { events: MusicEvent[]; length: number } = { events: [], length: 0 };
   private cursor = 0;
   private cursorBeat = 0;
@@ -31,6 +31,7 @@ class AudioEngine {
   private tempo = 1;
   sfxEnabled = true;
   private listeners = new Set<() => void>();
+  private trackListeners = new Set<(track: { name: string; composer: string } | null) => void>();
 
   /** Must be called from a user gesture at least once (browser autoplay rules). */
   unlock() {
@@ -50,6 +51,14 @@ class AudioEngine {
 
   onStateChange(f: () => void) {
     this.listeners.add(f);
+  }
+
+  onTrackChange(f: (track: { name: string; composer: string } | null) => void) {
+    this.trackListeners.add(f);
+  }
+
+  private notifyTrack(track: { name: string; composer: string } | null) {
+    this.trackListeners.forEach((f) => f(track));
   }
 
   private build() {
@@ -112,12 +121,15 @@ class AudioEngine {
   setMusic(mode: "calm" | "game" | null) {
     if (!this.ctx || mode === this.mode) return;
     this.mode = mode;
+    this.songGen++;
     const g = this.musicBus.gain;
     const now = this.ctx.currentTime;
     g.cancelScheduledValues(now);
     g.setValueAtTime(g.value, now);
     clearInterval(this.timer);
     if (!mode) {
+      this.activeSong = null;
+      this.notifyTrack(null);
       g.linearRampToValueAtTime(0, now + 0.6);
       return;
     }
@@ -125,27 +137,40 @@ class AudioEngine {
       this.pianoLoaded = true;
       this.loadPiano();
     }
-    const startWith = (all: Song[]) => {
-      if (!this.ctx || this.mode !== mode) return;
-      const t = this.ctx.currentTime;
-      g.cancelScheduledValues(t);
-      g.setValueAtTime(0, t + 0.05);
-      g.linearRampToValueAtTime(this.level(), t + 1.5);
-      this.playlist = all.filter((x) => x.mode === mode);
-      this.songIdx = Math.floor(Math.random() * this.playlist.length);
-      this.loops = 0;
-      this.compiled = compile(this.playlist[this.songIdx]!);
-      this.cursor = 0;
-      this.cursorBeat = 0;
-      this.cursorTime = t + 0.15;
-      clearInterval(this.timer);
-      this.timer = window.setInterval(() => this.schedule(), 50);
-    };
-    if (this.songs) startWith(this.songs);
-    else {
-      this.songsPromise ??= import("./songs").then((m) => (this.songs = m.SONGS));
-      void this.songsPromise.then(startWith).catch(() => {});
-    }
+    this.playlist = SONG_CATALOG.filter((x) => x.mode === mode);
+    this.songIdx = Math.floor(Math.random() * this.playlist.length);
+    this.startEntry(this.playlist[this.songIdx]!, this.songGen);
+  }
+
+  /** Jump immediately to the next piece in the current playlist. */
+  skipSong() {
+    if (!this.ctx || !this.mode || !this.playlist.length) return;
+    this.songGen++;
+    clearInterval(this.timer);
+    this.songIdx = (this.songIdx + 1) % this.playlist.length;
+    this.startEntry(this.playlist[this.songIdx]!, this.songGen);
+  }
+
+  private startEntry(entry: SongEntry, gen: number) {
+    void entry
+      .load()
+      .then((song) => {
+        if (!this.ctx || this.songGen !== gen || !this.mode) return;
+        const t = this.ctx.currentTime;
+        const g = this.musicBus.gain;
+        g.cancelScheduledValues(t);
+        g.setValueAtTime(0, t + 0.05);
+        g.linearRampToValueAtTime(this.level(), t + 1.4);
+        this.activeSong = song;
+        this.compiled = compile(song);
+        this.cursor = 0;
+        this.cursorBeat = 0;
+        this.cursorTime = t + 0.15;
+        this.notifyTrack({ name: entry.name, composer: entry.composer });
+        clearInterval(this.timer);
+        this.timer = window.setInterval(() => this.schedule(), 50);
+      })
+      .catch(() => {});
   }
 
   private level() {
@@ -183,23 +208,22 @@ class AudioEngine {
 
   private schedule() {
     const ctx = this.ctx!;
-    const song = this.playlist[this.songIdx]!;
+    const song = this.activeSong;
+    if (!song) return;
     const spb = 60 / (song.bpm * (song.mode === "game" ? this.tempo : 1));
     // Schedule well ahead: if the page is busy redrawing, the music keeps going.
     const horizon = ctx.currentTime + 0.6;
     for (let guard = 0; guard < 400; guard++) {
       const ev = this.compiled.events[this.cursor];
       if (!ev) {
-        // End of the loop: move on to the next tune every two plays.
-        this.cursorTime += (this.compiled.length - this.cursorBeat) * spb;
-        this.cursorBeat = 0;
-        this.cursor = 0;
-        // Songs are complete pieces now: move on to the next one after each play.
-        if (++this.loops > 0 && this.playlist.length > 1) {
-          this.songIdx = (this.songIdx + 1) % this.playlist.length;
-          this.compiled = compile(this.playlist[this.songIdx]!);
-          this.cursorTime += 60 / song.bpm; // a breath between songs
-        }
+        // Piece finished: load and play the next one in the playlist.
+        clearInterval(this.timer);
+        if (this.playlist.length > 1) this.songIdx = (this.songIdx + 1) % this.playlist.length;
+        const gen = ++this.songGen;
+        const next = this.playlist[this.songIdx]!;
+        setTimeout(() => {
+          if (this.songGen === gen && this.mode) this.startEntry(next, gen);
+        }, 700);
         return;
       }
       let t = this.cursorTime + (ev.beat - this.cursorBeat) * spb;
