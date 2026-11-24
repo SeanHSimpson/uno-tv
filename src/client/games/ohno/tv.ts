@@ -2,8 +2,9 @@
 
 import type { Card, Color, GameEvent, PublicPlayer, PublicState } from "../../../shared/games/ohno/types";
 import { audio } from "../../audio";
-import { cardEl, COLOR_NAMES, shapeSvg, shortLabel } from "../../cards";
+import { cardBackSvg, cardEl, COLOR_NAMES, shapeSvg, shortLabel } from "../../cards";
 import { confetti } from "../../fx";
+import { icoCrown } from "../../icons";
 import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
 
@@ -21,7 +22,7 @@ export function ohnoTv(ctx: TvCtx): GameView {
             .join("")}</g></g>
         </svg>
         <div class="piles">
-          <div class="deck" id="deck"><div class="deck-stack"></div><span class="deck-count" id="deck-count"></span></div>
+          <div class="deck" id="deck"><div class="deck-stack"><div class="deck-top">${cardBackSvg()}</div></div><span class="deck-count" id="deck-count"></span></div>
           <div class="discard" id="discard"></div>
           <div class="color-chip" id="color-chip"></div>
           <div class="pending" id="pending"></div>
@@ -62,6 +63,7 @@ export function ohnoTv(ctx: TvCtx): GameView {
       chip.innerHTML = `${shapeSvg(s.color, 28)}<span>${COLOR_NAMES[s.color]}</span>`;
       chip.dataset.color = s.color;
       $("#discard").dataset.color = s.color;
+      $("#ring").dataset.color = s.color;
     }
     const pend = $("#pending");
     pend.textContent = s.pendingDraw ? `+${s.pendingDraw}` : "";
@@ -102,6 +104,7 @@ export function ohnoTv(ctx: TvCtx): GameView {
 
   function renderSeats(s: PublicState) {
     const wrap = $("#seats");
+    wrap.dataset.density = s.players.length >= 7 ? "crowded" : "";
     const ids = new Set(s.players.map((p) => p.id));
     for (const [id, el] of seatEls) if (!ids.has(id)) (el.remove(), seatEls.delete(id));
     for (const p of s.players) {
@@ -110,6 +113,7 @@ export function ohnoTv(ctx: TvCtx): GameView {
         el = document.createElement("div");
         el.className = "seat";
         el.dataset.pid = p.id;
+        el.innerHTML = `<div class="seat-content" style="display:contents"></div>`;
         wrap.append(el);
         seatEls.set(p.id, el);
       }
@@ -117,12 +121,12 @@ export function ohnoTv(ctx: TvCtx): GameView {
       el.classList.toggle("offline", !p.connected);
       el.classList.toggle("last-card", p.count === 1 && s.phase === "playing");
       const fan = Math.min(p.count, 10);
-      el.innerHTML = `
+      const html = `
         <div class="seat-fan" style="--n:${fan}">${Array.from({ length: fan }, (_, i) => `<i style="--i:${i}"></i>`).join("")}</div>
         <div class="seat-body">
           ${avatar(p)}
           <div class="seat-text">
-            <div class="seat-name">${esc(p.name)}${p.bot ? ' <span class="bot-tag">bot</span>' : ""}${p.id === s.hostId ? ' <i class="crown" title="Host">♛</i>' : ""}</div>
+            <div class="seat-name">${esc(p.name)}${p.bot ? ' <span class="bot-tag">bot</span>' : ""}${p.id === s.hostId ? ` ${icoCrown()}` : ""}</div>
             <div class="seat-meta"><b>${p.count}</b> card${p.count === 1 ? "" : "s"}${
               s.settings.targetScore || s.round > 1 ? ` · ${p.score} pts` : ""
             }${p.calledOhNo && p.count <= 1 ? ' · <span class="ohno-tag">OhNo!</span>' : ""}</div>
@@ -130,6 +134,11 @@ export function ohnoTv(ctx: TvCtx): GameView {
         </div>
         <div class="seat-last">${p.lastPlayed ? cardEl(p.lastPlayed, "mini").outerHTML : ""}</div>
         ${s.turnId === p.id ? '<div class="seat-pointer">▼</div>' : ""}`;
+      const content = el.firstElementChild as HTMLElement;
+      if (content.dataset.html !== html) {
+        content.dataset.html = html;
+        content.innerHTML = html;
+      }
     }
     layoutSeats(s.players);
   }
@@ -177,10 +186,11 @@ export function ohnoTv(ctx: TvCtx): GameView {
         </div>
         <div class="scoreboard">
           ${ranked
-            .map((p) => {
+            .map((p, idx) => {
               const hand = s.reveal?.[p.id] ?? [];
               const pct = Math.round((p.score / (target || top)) * 100);
-              return `<div class="score-row ${p.id === s.roundWinner ? "win" : ""}">
+              return `<div class="score-row ${p.id === s.roundWinner ? "win" : ""}" style="--row:${idx}">
+                <span class="score-rank">${idx + 1}</span>
                 ${avatar(p, "sm")}<span class="score-name">${esc(p.name)}</span>
                 <span class="score-hand">${hand.slice(0, 14).map((c) => cardEl(c, "micro").outerHTML).join("")}${hand.length > 14 ? `<em>+${hand.length - 14}</em>` : ""}</span>
                 <span class="score-bar"><i style="width:${Math.min(100, pct)}%"></i></span>

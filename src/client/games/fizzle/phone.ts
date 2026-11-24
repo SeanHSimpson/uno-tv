@@ -5,9 +5,10 @@ import type { FizzleEvent, FizzlePrivate, FizzlePublic } from "../../../shared/g
 import { CARD_INFO } from "../../../shared/games/fizzle/engine";
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
+import { icoBoom, icoEye, icoTrophy } from "../../icons";
 import { $, avatar, esc, toast } from "../../ui";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
-import { fcardHtml, litHtml } from "./common";
+import { fcardHtml, litCrackerSvg, litHtml } from "./common";
 
 export function fizzlePhone(ctx: PhoneCtx): GameView {
   const pid = ctx.pid;
@@ -98,7 +99,7 @@ export function fizzlePhone(ctx: PhoneCtx): GameView {
     else if (s.phase === "over") msg = "Game over";
     else if (m.myTurn) msg = `<b>Your turn.</b> Play any cards you like, then draw.`;
     else msg = cur ? `${avatar(cur, "xs")} <b>${esc(cur.name)}</b>'s turn` : "";
-    $("#fz-status").innerHTML = `<div class="fz-msg">${msg}</div><div class="fz-deckinfo"><b>${s.deckCount}</b> in deck<br><span class="fz-danger">🧨 × ${s.crackersInDeck}</span></div>`;
+    $("#fz-status").innerHTML = `<div class="fz-msg">${msg}</div><div class="fz-deckinfo"><b>${s.deckCount}</b> in deck<br><span class="fz-danger">${litCrackerSvg(16)} × ${s.crackersInDeck}</span></div>`;
 
     const alert = $("#fz-alert");
     alert.hidden = !m.lit.length || m.out;
@@ -112,7 +113,7 @@ export function fizzlePhone(ctx: PhoneCtx): GameView {
 
     const peek = $("#fz-peek");
     peek.hidden = !m.peek?.length || !!m.out;
-    if (m.peek?.length) peek.innerHTML = `<small>👀 Top of the deck (you peeked)</small><div class="fz-peek-cards">${m.peek.map((c, i) => `<div class="fz-peek-slot"><em>${i === 0 ? "Next" : i + 1}</em>${fcardHtml(c, "fz-small")}</div>`).join("")}</div>`;
+    if (m.peek?.length) peek.innerHTML = `<small class="fz-peek-head">${icoEye(15)} Top of the deck (you peeked)</small><div class="fz-peek-cards">${m.peek.map((c, i) => `<div class="fz-peek-slot"><em>${i === 0 ? "Next" : i + 1}</em>${fcardHtml(c, "fz-small")}</div>`).join("")}</div>`;
 
     hand.innerHTML = m.hand.length
       ? m.hand
@@ -155,7 +156,7 @@ export function fizzlePhone(ctx: PhoneCtx): GameView {
     el.hidden = false;
     el.innerHTML = `
       <div class="ph-lobby-inner">
-        <div class="hush-big-emoji">${won ? "🏆" : "💥"}</div>
+        <div class="hush-big-emoji">${won ? icoTrophy() : icoBoom()}</div>
         <h2>${won ? "Last one standing: you!" : `${esc(w?.name ?? "Nobody")} wins!`}</h2>
         ${
           isHost

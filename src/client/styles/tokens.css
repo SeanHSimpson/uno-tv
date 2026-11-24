@@ -1,0 +1,86 @@
+/* OhNo! — cozy game-night design tokens and base reset. */
+
+:root {
+  --felt-1: #2f6a58;
+  --felt-2: #1f4a3e;
+  --felt-3: #143029;
+  --room: #1a1412;
+  --wood-1: #8a5a3b;
+  --wood-2: #5e3a24;
+  --cream: #fff6e6;
+  --cream-2: #f3e3c7;
+  --ink: #2b1d1a;
+  --amber: #ffbf5e;
+  --amber-glow: rgba(255, 191, 94, 0.55);
+  --muted: rgba(255, 246, 230, 0.68);
+  --danger: #e2553f;
+  --good: #6cc17a;
+  --c-red: #df5a42;
+  --c-yellow: #f2ad31;
+  --c-green: #4fa261;
+  --c-blue: #3f7fcf;
+  --surface: rgba(14, 18, 16, 0.34);
+  --surface-border: rgba(255, 246, 230, 0.14);
+  /* Ultra-lightweight pure-CSS subtle felt cross-grain (zero SVG filter CPU cost). */
+  --felt-weave: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.012) 0 2px, transparent 2px 6px);
+  --radius: 18px;
+  --font-display: "Fredoka", "Baloo 2", ui-rounded, system-ui, sans-serif;
+  --font-ui: "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--cream);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 35%, rgba(255, 184, 108, 0.16), transparent 70%),
+    radial-gradient(ellipse at 50% 120%, #2a1d17 0%, var(--room) 60%);
+  background-color: var(--room);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.9em;
+}
+
+.ui-ico {
+  display: inline-block;
+  vertical-align: middle;
+  flex: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

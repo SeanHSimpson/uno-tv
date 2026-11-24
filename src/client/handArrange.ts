@@ -8,6 +8,7 @@
 // Taps still select cards: a press only becomes a drag once the finger moves.
 
 import { layoutPiles, type PileAlign, type PileStyle } from "./handPiles";
+import { icoFan, icoGrid } from "./icons";
 
 type Card = { id: number };
 export type SortMode = "rank" | "suit" | "rows" | "free";
@@ -173,7 +174,7 @@ export class HandArranger<C extends Card> {
     const layoutBtn =
       this.mode !== "free" || opts.fan === false
         ? ""
-        : `<button class="tool-btn" data-layout aria-label="${this.layout === "fan" ? "Show cards in a grid" : "Fan the cards like a real hand"}">${this.layout === "fan" ? "▦ Grid" : "🂠 Fan"}</button>`;
+        : `<button class="tool-btn" data-layout aria-label="${this.layout === "fan" ? "Show cards in a grid" : "Fan the cards like a real hand"}">${this.layout === "fan" ? `${icoGrid(15)} Grid` : `${icoFan(15)} Fan`}</button>`;
     return `<div class="hand-tools">
       <div class="seg" role="group" aria-label="Sort your cards">${modes
         .map((m) => `<button class="seg-btn ${this.mode === m ? "on" : ""}" data-sort="${m}" aria-pressed="${this.mode === m}">${this.labels[m]}${this.mode === m ? this.styleTag(m) : ""}</button>`)

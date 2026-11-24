@@ -6,6 +6,7 @@ import { effSuit, power, shortCard, SUIT_NAMES, SUITS, TEAM_EMOJI, TEAM_NAMES } 
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
 import { attachReorder, fitHand, HandArranger, type SortMode } from "../../handArrange";
+import { icoDice, icoEye, icoPlay, icoTrophy } from "../../icons";
 import { $, avatar, esc, reducedMotion, toast } from "../../ui";
 import { tableSizeMenu } from "../tableSize";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
@@ -275,11 +276,11 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
       ${
         isHost
           ? `<p class="muted">${isHost && m.seated ? "Tap a player to move them. " : ""}Anyone who hasn't picked fills an open seat.</p>
-             <div class="eu-pick-host"><button class="btn btn-ghost" data-gact="${act({ t: "shuffleTeams" })}">🎲 Random teams</button>
-             <button class="btn btn-primary btn-xl" data-gact="${act({ t: "deal" })}">Deal ▶</button></div>`
+             <div class="eu-pick-host"><button class="btn btn-ghost" data-gact="${act({ t: "shuffleTeams" })}">${icoDice(16)} Random teams</button>
+             <button class="btn btn-primary btn-xl" data-gact="${act({ t: "deal" })}">Deal ${icoPlay(15)}</button></div>`
           : `<p class="muted">The host deals when the teams are set.</p>`
       }
-      <a class="btn btn-ghost eu-howto-link" href="${HOWTO}.mp4" target="_blank" rel="noopener">▶ How to play (3-minute video)</a>`;
+      <a class="btn btn-ghost eu-howto-link" href="${HOWTO}.mp4" target="_blank" rel="noopener">${icoPlay(15)} How to play (3-minute video)</a>`;
   }
 
   /** A bigger look at the table: the trick so far, the last trick, and who's taken what. */
@@ -320,7 +321,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
   }
 
   function renderHand(m: EuchrePrivate) {
-    $("#eu-tools").innerHTML = arranger.toolbar({ glance: "👀 Peek at table" });
+    $("#eu-tools").innerHTML = arranger.toolbar({ glance: `${icoEye(15)} Peek at table` });
     // Don't yank the cards out from under a finger that's on one (maybe starting a drag).
     if (reorder.holding()) {
       reorder.later(() => me && renderHand(me));
@@ -405,7 +406,7 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     el.hidden = false;
     el.innerHTML = `
       <div class="ph-lobby-inner">
-        <div class="hush-big-emoji">${won ? "🏆" : TEAM_EMOJI[t]}</div>
+        <div class="hush-big-emoji">${won ? icoTrophy() : TEAM_EMOJI[t]}</div>
         <h2>${won ? "We win!" : `${TEAM_EMOJI[t]} ${TEAM_NAMES[t]} wins`}</h2>
         <p class="muted">${s.score[t]} to ${s.score[1 - t]}</p>
         ${

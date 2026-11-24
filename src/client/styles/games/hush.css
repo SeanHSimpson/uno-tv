@@ -1,0 +1,317 @@
+/* Hush — celestial SVG number cards, starry nocturne TV stage, glowing hearts/stars, and phone view. */
+
+.num-card {
+  --cw: 9vmin;
+  position: relative;
+  width: var(--cw);
+  aspect-ratio: 2 / 3;
+  border-radius: 12% / 8%;
+  filter: drop-shadow(0 0.4vmin 1vmin rgba(0, 0, 0, 0.38));
+  flex: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.num-card .card-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Custom SVG hearts & stars */
+.hush-hearts,
+.hush-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+.hush-ico {
+  width: 1.05em;
+  height: 1.05em;
+  display: block;
+}
+.hush-heart {
+  filter: drop-shadow(0 0 6px rgba(235, 92, 77, 0.45));
+}
+.hush-star {
+  filter: drop-shadow(0 0 6px rgba(255, 207, 92, 0.55));
+}
+
+/* ---------- TV ---------- */
+.hush-tv {
+  position: relative;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 2vmin;
+  padding: 1vmin 4vmin 3vmin;
+  background:
+    radial-gradient(ellipse 72% 62% at 50% 42%, rgba(92, 114, 192, 0.28), transparent 72%),
+    radial-gradient(ellipse 95% 80% at 50% 100%, rgba(28, 34, 62, 0.55), transparent 75%);
+  isolation: isolate;
+}
+.hush-sky {
+  position: absolute;
+  inset: -12vmin 0 0;
+  width: 100%;
+  height: calc(100% + 12vmin);
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.hush-tokens {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2.2vmin;
+  font-size: 4.4vmin;
+  padding: 0.8vmin 2.8vmin;
+  justify-self: center;
+  border-radius: 999px;
+  background: rgba(16, 18, 34, 0.56);
+  box-shadow: inset 0 0 0 1px rgba(255, 246, 230, 0.12);
+}
+.hush-sep {
+  width: 0.35vmin;
+  height: 3.6vmin;
+  background: rgba(255, 246, 230, 0.2);
+  border-radius: 1vmin;
+}
+.hush-stage {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  align-items: center;
+  gap: 2vmin;
+  min-height: 0;
+}
+.hush-pile {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1.2vmin;
+}
+.hush-pile .nc-trail {
+  --cw: 8vmin;
+  opacity: 0.55;
+}
+.hush-pile .nc-top {
+  --cw: 22vmin;
+  margin-left: 1.5vmin;
+}
+.nc-land {
+  animation: nc-land 0.5s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+@keyframes nc-land {
+  from {
+    transform: translateY(-14vmin) rotate(-8deg) scale(0.7);
+    opacity: 0;
+  }
+}
+.hush-empty {
+  display: grid;
+  place-items: center;
+}
+.hush-empty .hush-moon-ico {
+  width: 18vmin;
+  height: 18vmin;
+  filter: drop-shadow(0 0 3vmin rgba(251, 231, 184, 0.32));
+  animation: moon-float 4s ease-in-out infinite;
+}
+@keyframes moon-float {
+  50% {
+    transform: translateY(-1vmin);
+  }
+}
+.hush-banner {
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 4vmin;
+  line-height: 1.25;
+  min-height: 9vmin;
+}
+.hush-banner small {
+  font-family: var(--font-ui);
+  font-size: 0.55em;
+  color: var(--muted);
+  font-weight: 700;
+}
+.hush-banner.flash {
+  padding: 1vmin 4vmin;
+  border-radius: 2vmin;
+  animation: rise 0.4s ease;
+}
+.hush-banner.flash.bad {
+  background: rgba(226, 85, 63, 0.2);
+  box-shadow: inset 0 0 0 0.4vmin var(--danger);
+}
+.hush-banner.flash.good {
+  background: rgba(255, 191, 94, 0.14);
+  box-shadow: inset 0 0 0 0.4vmin var(--amber);
+}
+.hush-banner.flash small {
+  color: var(--cream);
+}
+.hush-discards {
+  display: flex;
+  align-items: center;
+  gap: 0.8vmin;
+  flex-wrap: wrap;
+  justify-content: center;
+  min-height: 6vmin;
+}
+.nc-mini {
+  --cw: 4.2vmin;
+}
+.nc-out {
+  opacity: 0.6;
+  filter: grayscale(0.5);
+}
+.hush-players {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2vmin;
+}
+.hush-player {
+  display: grid;
+  justify-items: center;
+  gap: 0.6vmin;
+  padding: 1.4vmin 2vmin;
+  border-radius: 2vmin;
+  background: rgba(20, 22, 36, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 246, 230, 0.1);
+  min-width: 16vmin;
+  transition:
+    box-shadow 0.28s ease,
+    background 0.28s ease,
+    opacity 0.28s ease,
+    transform 0.25s ease;
+}
+.hush-player.ready-on {
+  box-shadow: inset 0 0 0 0.25vmin rgba(255, 191, 94, 0.55);
+}
+.hush-player.offline {
+  opacity: 0.5;
+}
+.hush-player.done {
+  opacity: 0.65;
+}
+.hp-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15em;
+}
+.hp-cards {
+  display: flex;
+  gap: 0.3vmin;
+  min-height: 3.6vmin;
+  align-items: center;
+}
+.hp-cards i {
+  width: 2.2vmin;
+  height: 3.3vmin;
+  border-radius: 0.4vmin;
+  background: linear-gradient(135deg, #5a6aa6, #333f72);
+  box-shadow: inset 0 0 0 0.25vmin var(--cream);
+}
+.hp-cards em {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+.hp-flag {
+  font-weight: 800;
+  font-size: 0.85em;
+  color: var(--amber);
+  min-height: 1.2em;
+}
+.hush-big-emoji {
+  font-size: 12vmin;
+  line-height: 1;
+}
+.hush-reveal {
+  display: grid;
+  gap: 1vmin;
+  justify-content: center;
+}
+.hush-reveal > div {
+  display: flex;
+  align-items: center;
+  gap: 1vmin;
+}
+
+/* ---------- Phone ---------- */
+.hush-phone {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 16px 14px;
+}
+.hush-ph-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--surface-border);
+}
+.hush-ph-top .hush-hearts,
+.hush-ph-top .hush-stars {
+  font-size: 1.2rem;
+}
+.hush-ph-last {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.hush-ph-last .nc-small {
+  --cw: 64px;
+}
+.hush-shh .hush-moon-ico {
+  width: 52px;
+  height: 52px;
+  filter: drop-shadow(0 0 10px rgba(251, 231, 184, 0.3));
+}
+.hush-ph-hand {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 8px;
+  touch-action: none;
+}
+.hush-ph-hand .num-card {
+  --cw: 72px;
+}
+.hush-ph-hand .num-card.nc-lowest {
+  --cw: 106px;
+  filter: none;
+  box-shadow:
+    0 0 0 3px var(--amber),
+    0 0 22px rgba(255, 191, 94, 0.55),
+    0 10px 18px rgba(0, 0, 0, 0.42);
+}
+.hush-ph-hand p {
+  text-align: center;
+}
+.hush-ph-actions {
+  display: grid;
+  gap: 10px;
+}
+.hush-go {
+  min-height: 64px;
+  font-size: 1.3rem;
+}
+#hush-star.on {
+  background: rgba(255, 191, 94, 0.22);
+  box-shadow: inset 0 0 0 2px var(--amber);
+}

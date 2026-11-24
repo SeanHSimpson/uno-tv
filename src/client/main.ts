@@ -1,6 +1,10 @@
 import "./styles.css";
 import { audio } from "./audio";
 import { cardEl, installCardDefs } from "./cards";
+import { ecardEl } from "./games/euchre/cards";
+import { fcardHtml } from "./games/fizzle/common";
+import { numCard } from "./games/hush/common";
+import { pcardEl } from "./playingCards";
 import { AVATARS } from "../shared/common";
 import { createRoom, roomExists, saveAvatar, savedAvatar, saveName, savedName } from "./net";
 import { mountPhone } from "./shell/phone";
@@ -35,7 +39,7 @@ function home(prefill: string) {
     <div class="home-hero">
       <div class="hero-cards" aria-hidden="true"></div>
       <div class="logo logo-xl">Oh<span>No!</span></div>
-      <p class="tagline">The cozy card game for one TV and a room full of phones.</p>
+      <p class="tagline">Cozy party card games for one TV and a room full of phones.</p>
     </div>
     <div class="home-panels ${joining ? "joining" : ""}">
       <form class="panel" id="join-form" autocomplete="off">
@@ -60,24 +64,30 @@ function home(prefill: string) {
     </div>
   </div>`;
 
-  // A few decorative cards fanned behind the logo.
+  // A decorative fan showcasing all five games in the hub.
   const fan = root.querySelector(".hero-cards")!;
-  (
-    [
-      ["red", "7"],
-      ["yellow", "reverse"],
-      ["wild", "wild"],
-      ["green", "draw2"],
-      ["blue", "skip"],
-    ] as const
-  ).forEach(([color, value], i) => {
-    const el = cardEl({ id: -1 - i, color, value }, "hero-card");
-    el.style.setProperty("--i", String(i - 2));
+  const htmlEl = (html: string) => {
+    const t = document.createElement("template");
+    t.innerHTML = html.trim();
+    return t.content.firstElementChild as HTMLElement;
+  };
+  const heroCards: HTMLElement[] = [
+    htmlEl(numCard(24, "hero-card")),
+    ecardEl({ id: -2, suit: "H", rank: 11 }, "hero-card"),
+    cardEl({ id: -3, color: "wild", value: "wild" }, "hero-card"),
+    pcardEl({ id: -4, suit: null, rank: 0 }, "hero-card"),
+    htmlEl(fcardHtml({ kind: "toss" }, "hero-card")),
+  ];
+  heroCards.forEach((el, idx) => {
+    const i = idx - 2;
+    el.style.setProperty("--i", String(i));
+    el.style.setProperty("--abs", String(Math.abs(i)));
     fan.append(el);
   });
 
-  if (joining && savedName()) ($("#name") as HTMLInputElement).focus();
-  else ($(joining ? "#name" : "#name") as HTMLInputElement).focus({ preventScroll: true });
+  if (joining && savedName()) ($("#join-form button[type=submit]") as HTMLButtonElement).focus({ preventScroll: true });
+  else if (!joining && savedName()) ($("#code") as HTMLInputElement).focus({ preventScroll: true });
+  else ($("#name") as HTMLInputElement).focus({ preventScroll: true });
 
   root.querySelector(".avatar-picker")!.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-avatar]");

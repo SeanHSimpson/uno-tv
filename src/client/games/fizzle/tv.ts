@@ -5,13 +5,14 @@ import type { FizzleEvent, FizzlePublic } from "../../../shared/games/fizzle/eng
 import { CARD_INFO } from "../../../shared/games/fizzle/engine";
 import { audio } from "../../audio";
 import { confetti } from "../../fx";
-import { $, avatar, esc, reducedMotion } from "../../ui";
+import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
-import { fcardHtml, litHtml } from "./common";
+import { fcardEl, fcardHtml, litCrackerSvg, litHtml } from "./common";
 
 export function fizzleTv(ctx: TvCtx): GameView {
   let alive = true;
   let state: FizzlePublic | null = null;
+  const seatEls = new Map<string, HTMLElement>();
   ctx.el.innerHTML = `
   <div class="fizzle-tv">
     <div class="fz-center">
@@ -33,19 +34,40 @@ export function fizzleTv(ctx: TvCtx): GameView {
   function render(s: FizzlePublic) {
     const inGame = s.players.filter((p) => !p.out && !p.waiting).length;
     ctx.setStatus(`Fizzle! · <b>${inGame}</b> still in`);
-    $("#fz-deck").innerHTML = `${fcardHtml(null, "fz-big")}<b>${s.deckCount} cards</b><span class="fz-danger">🧨 × ${s.crackersInDeck} hidden inside</span>`;
+    $("#fz-deck").innerHTML = `<div class="fz-deck-stack">${fcardHtml(null, "fz-big")}</div><b>${s.deckCount} cards</b><span class="fz-danger">${litCrackerSvg(22)} × ${s.crackersInDeck} hidden inside</span>`;
     $("#fz-discard").innerHTML = s.discardTop ? `${fcardHtml(s.discardTop, "fz-big")}<b>Last played</b>` : `<div class="fz-empty">Nothing played yet</div>`;
-    $("#fz-seats").innerHTML = s.players
-      .map(
-        (p) => `<div class="fz-seat ${s.turnId === p.id ? "turn" : ""} ${p.out ? "out" : ""} ${p.waiting ? "waiting" : ""} ${p.connected ? "" : "offline"} ${p.lit.length ? "burning" : ""}" data-pid="${esc(p.id)}">
+    const seats = $("#fz-seats");
+    const ids = new Set(s.players.map((p) => p.id));
+    for (const [id, el] of seatEls) if (!ids.has(id)) (el.remove(), seatEls.delete(id));
+    s.players.forEach((p, i) => {
+      let el = seatEls.get(p.id);
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "fz-seat";
+        el.dataset.pid = p.id;
+        el.innerHTML = `<div class="fz-seat-inner"></div>`;
+        seatEls.set(p.id, el);
+        seats.append(el);
+      } else if (seats.children[i] !== el) {
+        seats.insertBefore(el, seats.children[i] ?? null);
+      }
+      el.classList.toggle("turn", s.turnId === p.id);
+      el.classList.toggle("out", p.out);
+      el.classList.toggle("waiting", p.waiting);
+      el.classList.toggle("offline", !p.connected);
+      el.classList.toggle("burning", p.lit.length > 0);
+      const html = `
           ${avatar(p)}
           <div class="fz-name">${esc(p.name)}${p.bot ? ' <span class="bot-tag">bot</span>' : ""}</div>
           <div class="fz-meta">${p.out ? "💥 Out" : p.waiting ? "Joins next game" : `${p.count} card${p.count === 1 ? "" : "s"}`}</div>
           <div class="fz-lit">${litHtml(p.lit)}</div>
-          ${s.turnId === p.id ? '<div class="seat-pointer">▼</div>' : ""}
-        </div>`,
-      )
-      .join("");
+          ${s.turnId === p.id ? '<div class="seat-pointer">▼</div>' : ""}`;
+      const inner = el.firstElementChild as HTMLElement;
+      if (inner.dataset.html !== html) {
+        inner.dataset.html = html;
+        inner.innerHTML = html;
+      }
+    });
     if (s.phase === "playing" && s.turnId) {
       const p = s.players.find((x) => x.id === s.turnId)!;
       const lit = p.lit.length ? ` <span class="tag-pending">🧨 must toss or douse it!</span>` : "";
@@ -93,38 +115,67 @@ export function fizzleTv(ctx: TvCtx): GameView {
     setTimeout(() => b.remove(), 2000);
   }
 
+  function seatBox(pid: string): DOMRect | null {
+    const r = seat(pid)?.getBoundingClientRect();
+    if (!r) return null;
+    const w = Math.min(innerWidth, innerHeight) * 0.1;
+    return new DOMRect(r.left + r.width / 2 - w / 2, r.top + r.height / 2 - w * 0.75, w, w * 1.5);
+  }
+
   function react(events: FizzleEvent[]) {
     const log: string[] = [];
+    const quick = reducedMotion();
     for (const e of events) {
       switch (e.type) {
         case "deal":
           audio.shuffle();
           log.push(`New game: ${e.crackers} firecracker${e.crackers === 1 ? "" : "s"} hidden in the deck. ${name(e.first)} goes first`);
           break;
-        case "play":
+        case "play": {
           if (e.card.kind !== "water" && e.card.kind !== "toss") audio.cardPlay("normal");
           if (e.card.kind === "peek") audio.tick();
           if (e.card.kind === "nap") audio.pop();
+          if (!quick) {
+            const from = seatBox(e.pid);
+            const target = document.querySelector<HTMLElement>("#fz-discard .fcard");
+            if (from && target) {
+              target.style.visibility = "hidden";
+              fly(fcardEl(e.card), from, target.getBoundingClientRect(), { duration: 480, spin: -18 }).then(() => (target.style.visibility = ""));
+            }
+          }
           log.push(`${name(e.pid)} played ${CARD_INFO[e.card.kind].emoji} ${CARD_INFO[e.card.kind].name}`);
           break;
-        case "draw":
+        }
+        case "draw": {
           audio.draw(1);
+          if (!quick) {
+            const from = document.querySelector<HTMLElement>("#fz-deck .fcard")?.getBoundingClientRect();
+            const to = seatBox(e.pid);
+            if (from && to) fly(fcardEl(null), from, to, { duration: 460, spin: 16 });
+          }
           break;
+        }
         case "lit":
           audio.hiss();
-          bubble(e.pid, "🧨 Lit!", "bad");
-          log.push(`${name(e.pid)} drew a firecracker! 🧨 The fuse is lit`);
+          bubble(e.pid, "Lit!", "bad");
+          log.push(`${name(e.pid)} drew a firecracker! The fuse is lit`);
           break;
         case "douse":
           audio.splash();
-          bubble(e.pid, "💧 Phew!", "good");
+          bubble(e.pid, "Phew!", "good");
           log.push(`${name(e.pid)} doused it. Back into the deck it goes`);
           break;
-        case "toss":
+        case "toss": {
           audio.reverse();
-          bubble(e.target, "🧨 Catch!", "bad");
+          if (!quick) {
+            const from = seatBox(e.pid);
+            const to = seatBox(e.target);
+            if (from && to) fly(fcardEl({ kind: "cracker" }), from, to, { duration: 540, spin: 320 });
+          }
+          bubble(e.target, "Catch!", "bad");
           log.push(`${name(e.pid)} tossed the firecracker to ${name(e.target)}!`);
           break;
+        }
         case "shuffle":
           audio.shuffle();
           break;

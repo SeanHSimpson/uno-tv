@@ -7,6 +7,7 @@ import type { ClientMessage, RoomPublic } from "../../shared/room";
 import { audio, haptic, loadPref, savePref, unlockOnFirstGesture } from "../audio";
 import { SCREENS } from "../games";
 import type { GameSnap, GameView } from "../games/types";
+import { gameEmblem, icoBot, icoClose, icoCrown, icoSettings, icoSound } from "../icons";
 import { connectRoom, playerId, saveAvatar, savedAvatar, type Snapshot } from "../net";
 import { $, avatar, avatarPicker, esc, keepAwake, toast } from "../ui";
 import { gameCards, playersText, settingsControls, tvAudioControls } from "./common";
@@ -19,8 +20,8 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
     <header class="ph-top">
       <div class="ph-me" id="ph-me"></div>
       <div class="ph-room">Room <b>${esc(code)}</b></div>
-      <button class="icon-btn" id="ph-sound" aria-label="Phone sounds on/off">🔊</button>
-      <button class="icon-btn" id="ph-menu" aria-label="Host controls" hidden>⚙︎</button>
+      <button class="icon-btn" id="ph-sound" aria-label="Phone sounds on/off">${icoSound(true, 19)}</button>
+      <button class="icon-btn" id="ph-menu" aria-label="Host controls" hidden>${icoSettings(19)}</button>
     </header>
     <div class="ph-game" id="ph-game"></div>
     <section class="ph-lobby overlay" id="ph-lobby" hidden></section>
@@ -39,7 +40,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
   let soundOn = loadPref("phoneSound", true);
   unlockOnFirstGesture();
   const syncSoundBtn = () => {
-    $("#ph-sound").textContent = soundOn ? "🔊" : "🔇";
+    $("#ph-sound").innerHTML = icoSound(soundOn, 19);
     audio.sfxEnabled = soundOn;
   };
   syncSoundBtn();
@@ -75,7 +76,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
     room = snap.room;
     const isHost = room.hostId === pid;
     const self = room.members.find((m) => m.id === pid);
-    $("#ph-me").innerHTML = self ? `${avatar(self, "sm")}<span>${esc(self.name)}</span>${isHost ? '<i class="crown">♛</i>' : ""}` : "";
+    $("#ph-me").innerHTML = self ? `${avatar(self, "sm")}<span>${esc(self.name)}</span>${isHost ? icoCrown() : ""}` : "";
     $("#ph-menu").hidden = !isHost;
 
     const inLobby = room.phase === "lobby" || !snap.game;
@@ -121,8 +122,8 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
             (p) =>
               `<div class="lobby-player ${p.id === pid ? "me" : ""}">${
                 p.id === pid ? `<button class="avatar-edit" data-act="pickAvatar" aria-label="Change your picture">${avatar(p)}</button>` : avatar(p)
-              }<span>${esc(p.name)}${p.id === pid ? " (you)" : ""}</span>${p.id === r.hostId ? '<i class="crown">♛</i>' : ""}${
-                isHost && p.bot ? `<button class="remove-bot" data-act="kick" data-pid="${esc(p.id)}" aria-label="Remove ${esc(p.name)}">×</button>` : ""
+              }<span>${esc(p.name)}${p.id === pid ? " (you)" : ""}</span>${p.id === r.hostId ? icoCrown() : ""}${
+                isHost && p.bot ? `<button class="remove-bot" data-act="kick" data-pid="${esc(p.id)}" aria-label="Remove ${esc(p.name)}">${icoClose(13)}</button>` : ""
               }</div>`,
           )
           .join("")}</div>
@@ -131,7 +132,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
             ? `<h3 class="pick-title">Pick a game</h3>
                <div class="hub-games" role="radiogroup">${gameCards(r, true)}</div>
                <p class="hub-howto">${esc(meta.howTo)}</p>
-               <button class="btn btn-ghost wide" data-act="addBot">🤖 Add a bot player</button>
+               <button class="btn btn-ghost wide" data-act="addBot">${icoBot(18)} Add a bot player</button>
                ${settingsControls(r)}
                <button class="btn btn-primary btn-xl wide" data-act="start" ${enough && !tooMany ? "" : "disabled"}>${
                  tooMany ? `${esc(meta.name)} is for up to ${meta.maxPlayers}` : enough ? `Start ${esc(meta.name)}` : `${esc(meta.name)} needs ${playersText(r.gameId)} (or add a bot)`
@@ -147,7 +148,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
   /** Non-hosts just see the chosen game. */
   function gameCardFor(r: RoomPublic) {
     const m = GAMES[r.gameId].meta;
-    return `<div class="game-card on"><span class="gc-emoji">${m.emoji}</span><span class="gc-text"><b>${esc(m.name)}</b><small>${esc(m.tagline)}</small><em>${playersText(r.gameId)}${m.coop ? " · co-op" : ""}</em></span></div>`;
+    return `<div class="game-card on" data-game="${r.gameId}"><span class="gc-emoji">${gameEmblem(r.gameId)}</span><span class="gc-text"><b>${esc(m.name)}</b><small>${esc(m.tagline)}</small><em>${playersText(r.gameId)}${m.coop ? " · co-op" : ""}</em></span></div>`;
   }
 
   function renderHostSheet() {
@@ -166,7 +167,7 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
           }</div>`,
         )
         .join("")}</div>
-      <button class="btn btn-ghost wide" data-act="addBot">🤖 Add a bot player${playing ? " (joins now)" : ""}</button>
+      <button class="btn btn-ghost wide" data-act="addBot">${icoBot(18)} Add a bot player${playing ? " (joins now)" : ""}</button>
       ${playing ? `<button class="btn btn-ghost wide" data-act="endGame">End game &amp; pick another</button>` : ""}
       <button class="btn btn-ghost wide" data-close>Close</button>`;
   }

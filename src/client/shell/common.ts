@@ -3,6 +3,7 @@
 import { GAME_ORDER, GAMES } from "../../shared/games";
 import type { GameId } from "../../shared/games/types";
 import type { RoomPublic } from "../../shared/room";
+import { gameEmblem } from "../icons";
 import { esc } from "../ui";
 
 export const playersText = (id: GameId) => {
@@ -15,9 +16,9 @@ export function gameCards(room: RoomPublic, act: boolean): string {
   return GAME_ORDER.map((id) => {
     const m = GAMES[id].meta;
     const on = id === room.gameId;
-    const attrs = act ? `data-act="selectGame" data-game="${id}" role="radio" aria-checked="${on}"` : "";
-    return `<${act ? "button" : "div"} class="game-card ${on ? "on" : ""}" ${attrs}>
-      <span class="gc-emoji">${m.emoji}</span>
+    const attrs = act ? `data-act="selectGame" role="radio" aria-checked="${on}"` : "";
+    return `<${act ? "button" : "div"} class="game-card ${on ? "on" : ""}" data-game="${id}" ${attrs}>
+      <span class="gc-emoji">${gameEmblem(id)}</span>
       <span class="gc-text"><b>${esc(m.name)}</b><small>${esc(m.tagline)}</small><em>${playersText(id)}${m.coop ? " · co-op" : ""}</em></span>
       ${on ? `<span class="gc-next">Up next</span>` : ""}
     </${act ? "button" : "div"}>`;

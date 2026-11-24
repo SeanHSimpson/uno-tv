@@ -6,6 +6,7 @@ import { selectionHint } from "../../../shared/games/rummy/hint";
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
 import { attachReorder, fitHand, HandArranger, type SortMode } from "../../handArrange";
+import { icoEye } from "../../icons";
 import { pcardEl, pcardHtml, shortCard } from "../../playingCards";
 import { $, avatar, esc, reducedMotion, toast } from "../../ui";
 import { tableSizeMenu } from "../tableSize";
@@ -284,7 +285,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
 
   function renderHand() {
     const m = me!;
-    $("#rm-tools").innerHTML = arranger.toolbar({ glance: "👀 Table" });
+    $("#rm-tools").innerHTML = arranger.toolbar({ glance: `${icoEye(15)} Table` });
     // Don't yank the cards out from under a finger that's on one (maybe starting a drag).
     if (reorder.holding()) {
       reorder.later(() => me && renderHand());

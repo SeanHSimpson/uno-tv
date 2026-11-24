@@ -1,7 +1,7 @@
 {
-  "name": "OhNo!",
+  "name": "OhNo! Game Night",
   "short_name": "OhNo!",
-  "description": "A cozy card game for one TV and a room full of phones.",
+  "description": "Cozy party card games for one TV and a room full of phones.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1f3a33",

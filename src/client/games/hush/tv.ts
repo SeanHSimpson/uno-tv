@@ -3,16 +3,32 @@
 import type { HushEvent, HushPublic } from "../../../shared/games/hush/engine";
 import { audio } from "../../audio";
 import { confetti } from "../../fx";
-import { $, avatar, esc, reducedMotion } from "../../ui";
+import { icoBrokenHeart } from "../../icons";
+import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
-import { hearts, nameOf, numCard, pitchFor, stars } from "./common";
+import { hearts, moonEmblem, nameOf, numCard, numCardEl, pitchFor, stars } from "./common";
+
+const NIGHT_SKY = `<svg class="hush-sky" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <g fill="#fff6e6">${Array.from(
+    { length: 44 },
+    (_, i) =>
+      `<circle cx="${(i * 197 + 43) % 1600}" cy="${(i * 113 + 31) % 680}" r="${0.9 + (i % 4) * 0.55}" fill-opacity="${(0.18 + (i % 5) * 0.11).toFixed(2)}"/>`,
+  ).join("")}</g>
+  <g fill="#ffcf5c" fill-opacity=".45">
+    <path d="M240 160l3 9 9 3-9 3-3 9-3-9-9-3 9-3Z"/>
+    <path d="M1340 240l2.4 7 7 2.4-7 2.4-2.4 7-2.4-7-7-2.4 7-2.4Z"/>
+    <path d="M460 390l2 6 6 2-6 2-2 6-2-6-6-2 6-2Z"/>
+  </g>
+</svg>`;
 
 export function hushTv(ctx: TvCtx): GameView {
   let alive = true;
   let state: HushPublic | null = null;
   let flashTimer = 0;
+  const playerEls = new Map<string, HTMLElement>();
   ctx.el.innerHTML = `
   <div class="hush-tv">
+    ${NIGHT_SKY}
     <div class="hush-tokens" id="hush-tokens"></div>
     <div class="hush-stage">
       <div class="hush-pile" id="hush-pile"></div>
@@ -36,7 +52,7 @@ export function hushTv(ctx: TvCtx): GameView {
 
     // The pile: the last few cards, rising left to right, newest biggest.
     const pile = $("#hush-pile");
-    if (!s.pile.length) pile.innerHTML = `<div class="hush-empty">🤫</div>`;
+    if (!s.pile.length) pile.innerHTML = `<div class="hush-empty">${moonEmblem()}</div>`;
     else {
       pile.innerHTML = s.pile.map((n, i) => numCard(n, i === s.pile.length - 1 ? "nc-top" : "nc-trail")).join("");
       if (prev && prev.played < s.played && !reducedMotion()) pile.lastElementChild?.classList.add("nc-land");
@@ -58,16 +74,33 @@ export function hushTv(ctx: TvCtx): GameView {
       banner.className = "hush-banner";
     }
 
-    $("#hush-players").innerHTML = s.players
-      .map(
-        (p) => `<div class="hush-player ${p.connected ? "" : "offline"} ${p.count === 0 && s.phase === "playing" ? "done" : ""}">
+    const wrap = $("#hush-players");
+    const ids = new Set(s.players.map((p) => p.id));
+    for (const [id, el] of playerEls) if (!ids.has(id)) (el.remove(), playerEls.delete(id));
+    s.players.forEach((p, i) => {
+      let el = playerEls.get(p.id);
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "hush-player";
+        el.dataset.pid = p.id;
+        playerEls.set(p.id, el);
+        wrap.append(el);
+      } else if (wrap.children[i] !== el) {
+        wrap.insertBefore(el, wrap.children[i] ?? null);
+      }
+      el.classList.toggle("offline", !p.connected);
+      el.classList.toggle("done", p.count === 0 && s.phase === "playing");
+      el.classList.toggle("ready-on", s.phase === "ready" && p.ready);
+      const html = `
           ${avatar(p)}
           <div class="hp-name">${esc(p.name)}${p.bot ? ' <span class="bot-tag">bot</span>' : ""}</div>
           <div class="hp-cards">${Array.from({ length: Math.min(p.count, 12) }, () => "<i></i>").join("")}${p.count > 12 ? `<em>+${p.count - 12}</em>` : ""}</div>
-          <div class="hp-flag">${s.phase === "ready" ? (p.ready ? "✓ Ready" : "…") : p.star ? "⭐ wants a star" : p.count === 0 ? "done" : ""}</div>
-        </div>`,
-      )
-      .join("");
+          <div class="hp-flag">${s.phase === "ready" ? (p.ready ? "✓ Ready" : "…") : p.star ? "⭐ wants a star" : p.count === 0 ? "done" : ""}</div>`;
+      if (el.dataset.html !== html) {
+        el.dataset.html = html;
+        el.innerHTML = html;
+      }
+    });
 
     renderResults(s);
   }
@@ -87,7 +120,7 @@ export function hushTv(ctx: TvCtx): GameView {
     el.innerHTML = `
       <div class="results-card">
         <div class="results-head">
-          <div class="hush-big-emoji">${won ? "🌙" : "💔"}</div>
+          <div class="hush-big-emoji">${won ? moonEmblem("medallion-ico") : icoBrokenHeart()}</div>
           <h1>${won ? `You did it! All ${s.goal} levels, together.` : `Out of hearts on level ${s.level}`}</h1>
           <p class="results-points">${won ? "Not a word spoken. Impressive." : "So close. The quiet got the better of you this time."}</p>
         </div>
@@ -124,9 +157,22 @@ export function hushTv(ctx: TvCtx): GameView {
     const players = state?.players ?? [];
     for (const e of events) {
       switch (e.type) {
-        case "play":
+        case "play": {
           audio.note(pitchFor(e.card));
+          if (!reducedMotion()) {
+            const fromEl = playerEls.get(e.pid);
+            const top = document.querySelector<HTMLElement>("#hush-pile .nc-top");
+            if (fromEl && top) {
+              const r = fromEl.getBoundingClientRect();
+              const w = Math.min(innerWidth, innerHeight) * 0.08;
+              const from = new DOMRect(r.left + r.width / 2 - w / 2, r.top, w, w * 1.5);
+              top.style.visibility = "hidden";
+              top.classList.remove("nc-land");
+              fly(numCardEl(e.card), from, top.getBoundingClientRect(), { duration: 480, spin: -10 }).then(() => (top.style.visibility = ""));
+            }
+          }
           break;
+        }
         case "ready":
           audio.tick();
           break;

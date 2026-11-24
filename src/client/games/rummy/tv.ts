@@ -5,6 +5,7 @@ import { audio } from "../../audio";
 import { confetti } from "../../fx";
 import type { PCard } from "../../../shared/games/rummy/cards";
 import { pcardEl, pcardHtml, shortCard } from "../../playingCards";
+import { icoCrown } from "../../icons";
 import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import { DEAL_FLY, dealDuration, dealOrder, dealStep, landsAt, leavesAt, TURN_UP_FLY, turnUpAt } from "../../../shared/games/rummy/deal";
 import type { GameSnap, GameView, TvCtx } from "../types";
@@ -12,6 +13,7 @@ import type { GameSnap, GameView, TvCtx } from "../types";
 export function rummyTv(ctx: TvCtx): GameView {
   let alive = true;
   let state: RummyPublic | null = null;
+  const boardEls = new Map<string, HTMLElement>();
   ctx.el.innerHTML = `
   <div class="rummy-tv">
     <div class="rm-top">
@@ -60,20 +62,34 @@ export function rummyTv(ctx: TvCtx): GameView {
   function render(s: RummyPublic) {
     ctx.setStatus(`Contract Rummy · Round <b>${s.round}</b> of ${s.rounds}`);
     $("#rm-contract").innerHTML = `<small>Round ${s.round} of ${s.rounds} · contract</small><b>${esc(s.contractText)}</b>`;
-    $("#rm-stock").innerHTML = `${pcardHtml(null, "rm-pile")}<span>${s.stockCount} left</span>`;
+    $("#rm-stock").innerHTML = `<div class="rm-stock-stack">${pcardHtml(null, "rm-pile")}</div><span>${s.stockCount} left</span>`;
     $("#rm-discard").innerHTML = s.discardTop ? `${pcardHtml(s.discardTop, "rm-pile rm-top-discard")}<span>Discard</span>` : `<div class="rm-empty">Empty</div><span>Discard</span>`;
     $("#rm-mayi").innerHTML = s.mayI.length ? `🙋 ${s.mayI.map((pid) => `<b>${names(pid)}</b>`).join(", ")} asked “May I?”` : "";
 
     const boards = $("#rm-boards");
     boards.style.setProperty("--n", String(s.players.length));
-    boards.innerHTML = s.players
-      .map((p, i) => {
-        const melds = s.melds.filter((m) => m.owner === p.id);
-        const fan = Math.min(cardsShown(i, p.count), 14);
-        return `<div class="rm-board ${s.turnId === p.id ? "turn" : ""} ${p.connected ? "" : "offline"}" data-pid="${esc(p.id)}">
+    const ids = new Set(s.players.map((p) => p.id));
+    for (const [id, el] of boardEls) if (!ids.has(id)) (el.remove(), boardEls.delete(id));
+    s.players.forEach((p, i) => {
+      let el = boardEls.get(p.id);
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "rm-board";
+        el.dataset.pid = p.id;
+        el.innerHTML = `<div class="rm-board-body" style="display:contents"></div>`;
+        boardEls.set(p.id, el);
+        boards.append(el);
+      } else if (boards.children[i] !== el) {
+        boards.insertBefore(el, boards.children[i] ?? null);
+      }
+      el.classList.toggle("turn", s.turnId === p.id);
+      el.classList.toggle("offline", !p.connected);
+      const melds = s.melds.filter((m) => m.owner === p.id);
+      const fan = Math.min(cardsShown(i, p.count), 14);
+      const html = `
           <div class="rm-head">
             ${avatar(p, "sm")}
-            <div class="rm-who"><div class="rm-name"><b>${esc(p.name)}</b>${p.bot ? ' <span class="bot-tag">bot</span>' : ""}${p.id === s.hostId ? ' <i class="crown">♛</i>' : ""}</div>
+            <div class="rm-who"><div class="rm-name"><b>${esc(p.name)}</b>${p.bot ? ' <span class="bot-tag">bot</span>' : ""}${p.id === s.hostId ? ` ${icoCrown()}` : ""}</div>
               <small><span class="rm-count">${countText(cardsShown(i, p.count))}</span> · ${p.score} pts${p.buys ? ` · ${p.buys} May I` : ""}</small></div>
             ${p.partial ? `<span class="rm-part">Part down</span>` : ""}
             ${p.down ? `<span class="rm-down">✓ Down</span>` : `<span class="rm-fan">${Array.from({ length: fan }, () => "<i></i>").join("")}</span>`}
@@ -82,10 +98,13 @@ export function rummyTv(ctx: TvCtx): GameView {
             melds.length
               ? melds.map((m) => `<div class="rm-meld" data-meld="${m.id}"><span class="rm-kind">${m.kind}</span>${m.cards.map((c) => pcardHtml(c, "rm-mini")).join("")}</div>`).join("")
               : `<span class="muted">${p.down ? "" : "Not down yet"}</span>`
-          }</div>
-        </div>`;
-      })
-      .join("");
+          }</div>`;
+      const body = el.firstElementChild as HTMLElement;
+      if (body.dataset.html !== html) {
+        body.dataset.html = html;
+        body.innerHTML = html;
+      }
+    });
     fitBoards(s.table);
 
     if (s.phase === "playing" && s.turnId) {
@@ -113,9 +132,15 @@ export function rummyTv(ctx: TvCtx): GameView {
       const b = boardOf(p.id);
       const n = cardsShown(i, p.count);
       const fan = b?.querySelector(".rm-fan");
-      if (fan && fan.childElementCount !== Math.min(n, 14)) fan.innerHTML = "<i></i>".repeat(Math.min(n, 14));
+      if (fan && fan.childElementCount !== Math.min(n, 14)) {
+        fan.innerHTML = "<i></i>".repeat(Math.min(n, 14));
+        delete (b?.firstElementChild as HTMLElement | null)?.dataset.html;
+      }
       const c = b?.querySelector(".rm-count");
-      if (c) c.textContent = countText(n);
+      if (c && c.textContent !== countText(n)) {
+        c.textContent = countText(n);
+        delete (b?.firstElementChild as HTMLElement | null)?.dataset.html;
+      }
     });
   }
 
@@ -155,7 +180,7 @@ export function rummyTv(ctx: TvCtx): GameView {
           <thead><tr><th></th>${s.plan.map((_, i) => `<th>${i + 1}</th>`).join("")}<th>Total</th></tr></thead>
           <tbody>${ranked
             .map(
-              (p) => `<tr class="${p.id === s.roundWinner ? "win" : ""}"><td>${avatar(p, "xs")} ${esc(p.name)}</td>${s.plan
+              (p, idx) => `<tr class="${p.id === s.roundWinner ? "win" : ""}" style="--row:${idx}"><td>${avatar(p, "xs")} ${esc(p.name)}</td>${s.plan
                 .map((_, i) => `<td>${p.roundScores[i] ?? ""}</td>`)
                 .join("")}<td><b>${p.score}</b></td></tr>`,
             )

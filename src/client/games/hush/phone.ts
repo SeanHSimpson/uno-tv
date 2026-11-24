@@ -3,9 +3,10 @@
 import type { HushEvent, HushPrivate, HushPublic } from "../../../shared/games/hush/engine";
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
+import { icoBrokenHeart } from "../../icons";
 import { $, toast } from "../../ui";
 import type { GameSnap, GameView, PhoneCtx } from "../types";
-import { hearts, numCard, pitchFor, stars } from "./common";
+import { hearts, moonEmblem, numCard, pitchFor, stars } from "./common";
 
 export function hushPhone(ctx: PhoneCtx): GameView {
   const pid = ctx.pid;
@@ -70,7 +71,7 @@ export function hushPhone(ctx: PhoneCtx): GameView {
     const m = me;
     $("#hush-top").innerHTML = `<span>Level <b>${s.level}</b>/${s.goal}</span>${hearts(s.hearts)}${stars(s.stars)}`;
     const top = s.pile[s.pile.length - 1];
-    $("#hush-last").innerHTML = top !== undefined ? `<small>Last played</small>${numCard(top, "nc-small")}` : `<small>Nothing played yet</small><div class="hush-shh">🤫</div>`;
+    $("#hush-last").innerHTML = top !== undefined ? `<small>Last played</small>${numCard(top, "nc-small")}` : `<small>Nothing played yet</small><div class="hush-shh">${moonEmblem()}</div>`;
 
     const hand = m?.hand ?? [];
     $("#hush-hand").innerHTML = hand.length
@@ -116,7 +117,7 @@ export function hushPhone(ctx: PhoneCtx): GameView {
     el.hidden = false;
     el.innerHTML = `
       <div class="ph-lobby-inner">
-        <div class="hush-big-emoji">${won ? "🌙" : "💔"}</div>
+        <div class="hush-big-emoji">${won ? moonEmblem("medallion-ico") : icoBrokenHeart()}</div>
         <h2>${won ? "You did it, together!" : `Out of hearts on level ${s.level}`}</h2>
         <p class="muted">${won ? `All ${s.goal} levels without a word.` : "Shake it off and try again."}</p>
         ${

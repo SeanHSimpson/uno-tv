@@ -7,6 +7,7 @@ import type { RoomPublic } from "../../shared/room";
 import { audio, loadPref, savePref, unlockOnFirstGesture } from "../audio";
 import { SCREENS } from "../games";
 import type { GameView } from "../games/types";
+import { gameEmblem, icoCrown, icoSound } from "../icons";
 import { connectRoom, type Snapshot } from "../net";
 import { $, avatar, esc, joinOrigin, keepAwake, toast } from "../ui";
 import { gameCards, playersText, settingsChips } from "./common";
@@ -20,7 +21,7 @@ export function mountTv(root: HTMLElement, code: string) {
     <header class="tv-top">
       <div class="logo">Oh<span>No!</span></div>
       <div class="tv-round" id="tv-status"></div>
-      <button class="sound-btn" id="tv-sound" title="Sound on/off (M)" aria-label="Sound on/off">🔊</button>
+      <button class="sound-btn" id="tv-sound" title="Sound on/off (M)" aria-label="Sound on/off">${icoSound(true, 22)}</button>
       <div class="tv-join">
         <div class="qr qr-mini" id="qr-mini"></div>
         <div class="tv-join-text"><small>Join at <b>${esc(prettyUrl)}</b></small><span class="code">${esc(code)}</span></div>
@@ -48,7 +49,7 @@ export function mountTv(root: HTMLElement, code: string) {
       </div>
     </section>
     <div class="conn-lost" id="conn-lost" hidden>Reconnecting…</div>
-    <button class="tap-sound" id="tap-sound" hidden>🔈 Click anywhere for music &amp; sound</button>
+    <button class="tap-sound" id="tap-sound" hidden>${icoSound(true, 18)} Click anywhere for music &amp; sound</button>
   </div>`;
 
   QRCode.toString(joinUrl, { margin: 1, color: { dark: "#2b1d1a", light: "#fff6e6" }, type: "svg" }).then((svg) => {
@@ -105,11 +106,12 @@ export function mountTv(root: HTMLElement, code: string) {
 
   function renderLobby(r: RoomPublic) {
     const meta = GAMES[r.gameId].meta;
+    $("#tv-lobby").dataset.selectedGame = r.gameId;
     $("#hub-games").innerHTML = gameCards(r, false);
-    $("#hub-howto").innerHTML = `<b>${meta.emoji} ${esc(meta.name)}:</b> ${esc(meta.howTo)}`;
+    $("#hub-howto").innerHTML = `<span class="howto-emblem">${gameEmblem(r.gameId)}</span><b>${esc(meta.name)}:</b> ${esc(meta.howTo)}`;
     $("#lobby-players").innerHTML = r.members.length
       ? r.members
-          .map((p) => `<div class="lobby-player">${avatar(p)}<span>${esc(p.name)}${p.id === r.hostId ? ' <i class="crown" title="Host">♛</i>' : ""}</span></div>`)
+          .map((p) => `<div class="lobby-player">${avatar(p)}<span>${esc(p.name)}${p.id === r.hostId ? ` ${icoCrown()}` : ""}</span></div>`)
           .join("")
       : `<div class="lobby-empty">Nobody here yet…</div>`;
     const host = r.members.find((p) => p.id === r.hostId);
@@ -156,7 +158,7 @@ export function mountTv(root: HTMLElement, code: string) {
 
   function syncAudio() {
     $("#tap-sound").hidden = audio.ready || muted;
-    $("#tv-sound").textContent = muted ? "🔇" : "🔊";
+    $("#tv-sound").innerHTML = icoSound(!muted, 22);
     if (!room) return;
     audio.sfxEnabled = !muted && room.audio.tvSounds;
     const mood = room.phase === "game" ? GAMES[room.gameId].meta.music : "calm";

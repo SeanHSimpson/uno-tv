@@ -6,6 +6,7 @@ import type { EuchreEvent, EuchrePublic } from "../../../shared/games/euchre/eng
 import { shortCard, SUIT_NAMES, TEAM_EMOJI, TEAM_NAMES } from "../../../shared/games/euchre/engine";
 import { audio } from "../../audio";
 import { confetti } from "../../fx";
+import { icoClose, icoPlay } from "../../icons";
 import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
 import { ecardEl, ecardHtml, HOWTO, suitIcon } from "./cards";
@@ -18,11 +19,11 @@ const DIR: Record<(typeof POS)[number], [number, number]> = { bottom: [0, 1], le
 
 export const SCENERY = `<svg class="eu-scenery" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
   <defs><linearGradient id="eu-water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a5a73"/><stop offset="1" stop-color="#0f2a38"/></linearGradient></defs>
-  <circle cx="1310" cy="150" r="58" fill="#fbe9c0" fill-opacity=".9"/>
-  <circle cx="1290" cy="135" r="58" fill="#1a2f45" fill-opacity=".25"/>
+  <circle cx="1190" cy="235" r="56" fill="#fbe9c0" fill-opacity=".9"/>
+  <circle cx="1170" cy="220" r="56" fill="#1a2f45" fill-opacity=".25"/>
   <g fill="#fff6e6" fill-opacity=".6">${Array.from({ length: 26 }, (_, i) => `<circle cx="${(i * 233) % 1600}" cy="${30 + ((i * 97) % 260)}" r="${1 + (i % 3) * 0.6}"/>`).join("")}</g>
   <rect y="560" width="1600" height="340" fill="url(#eu-water)"/>
-  <path d="M1250 580h120M1270 610h80M1290 640h40" stroke="#fbe9c0" stroke-opacity=".35" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1130 580h120M1150 610h80M1170 640h40" stroke="#fbe9c0" stroke-opacity=".35" stroke-width="4" stroke-linecap="round"/>
   <path fill="#0d241c" d="M0 560${Array.from({ length: 40 }, (_, i) => {
     const x = i * 41;
     const h = 70 + ((i * 53) % 90);
@@ -52,7 +53,7 @@ export function euchreTv(ctx: TvCtx): GameView {
         <div class="eu-center" id="eu-center"></div>
         <div class="eu-trick" id="eu-trick"></div>
       </div>
-      ${POS.map((p, i) => `<div class="eu-seat pos-${p}" id="eu-seat-${i}"></div>`).join("")}
+      ${POS.map((p, i) => `<div class="eu-seat pos-${p}" id="eu-seat-${i}"><div class="eu-seat-inner"></div></div>`).join("")}
     </div>
     <footer class="ticker"><div class="ticker-main" id="eu-turn"></div><div class="ticker-sub" id="eu-log"></div></footer>
     <section class="eu-banner" id="eu-banner" hidden></section>
@@ -63,7 +64,7 @@ export function euchreTv(ctx: TvCtx): GameView {
         <source src="${HOWTO}.mp4" type="video/mp4" />
         <track kind="captions" src="${HOWTO}.vtt" srclang="en" label="English" default />
       </video>
-      <button class="btn btn-ghost eu-howto-close" data-howto="close">✕ Close <small>(H)</small></button>
+      <button class="btn btn-ghost eu-howto-close" data-howto="close">${icoClose(18)} Close <small>(H)</small></button>
     </section>
   </div>`;
 
@@ -152,7 +153,7 @@ export function euchreTv(ctx: TvCtx): GameView {
       <div class="eu-pick-tv-row">${team(0)}<div class="eu-pick-tv-vs">vs</div>${team(1)}</div>
       ${undecided.length ? `<div class="eu-pick-tv-undecided"><small>Still choosing</small>${undecided.map((p) => `<span>${avatar(p, "sm")}${esc(p.name)}</span>`).join("")}</div>` : ""}
       <p class="results-next">The host deals from their phone when the teams are set (or press <kbd>Enter</kbd> here). Anyone who hasn't picked fills an open seat.</p>
-      <button class="btn btn-ghost eu-howto-btn" data-howto="open">▶ How to play Euchre <small>3-minute video · or press <kbd>H</kbd></small></button>`;
+      <button class="btn btn-ghost eu-howto-btn" data-howto="open"><span class="eu-howto-btn-main">${icoPlay(20)} How to play Euchre</span><small>3-minute video · or press <kbd>H</kbd></small></button>`;
   }
 
   function renderScores(s: EuchrePublic) {
@@ -203,7 +204,7 @@ export function euchreTv(ctx: TvCtx): GameView {
       const out = s.outId === p.id;
       el.className = `eu-seat pos-${POS[i]} t${p.team} ${s.turnId === p.id ? "turn" : ""} ${out ? "out" : ""} ${p.connected ? "" : "offline"}`;
       const backs = Math.min(backsShown(i, p.count), 6);
-      el.innerHTML = `
+      const html = `
         ${avatar(p)}
         <div class="eu-seat-info">
           <div class="eu-seat-name">${esc(p.name)}${p.bot ? ' <span class="bot-tag">bot</span>' : ""}</div>
@@ -218,6 +219,11 @@ export function euchreTv(ctx: TvCtx): GameView {
           }</div>
         </div>
         ${bidding && p.bid ? `<div class="eu-bid ${p.bid === "Pass" ? "pass" : "call"}">${esc(p.bid)}</div>` : ""}`;
+      const inner = el.firstElementChild as HTMLElement;
+      if (inner.dataset.html !== html) {
+        inner.dataset.html = html;
+        inner.innerHTML = html;
+      }
     });
   }
 
