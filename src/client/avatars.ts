@@ -1,6 +1,31 @@
-// Illustrated storybook SVG character badges for all 24 player avatars + bot.
-// Keeps full compatibility with the stored emoji avatar IDs ("🦊", "🐻", etc.)
-// while rendering crisp, unified hand-crafted vector art across every phone & TV.
+// Wacky gross-out mutant portrait avatars (16 painted .webp portraits) plus illustrated SVG
+// fallbacks for legacy IDs and a gnarly junkyard-mutant bot badge.
+// Keeps full wire/storage compatibility with the existing AVATARS IDs in shared/common.ts.
+
+export const MUTANT_PORTRAITS: { id: string; src: string; label: string }[] = [
+  { id: "🦊", src: "/avatars/m00.webp", label: "Slime Goblin" },
+  { id: "🐻", src: "/avatars/m01.webp", label: "Winged Eyeball" },
+  { id: "🐼", src: "/avatars/m02.webp", label: "King Ooze" },
+  { id: "🐨", src: "/avatars/m03.webp", label: "Mohawk Rat" },
+  { id: "🐯", src: "/avatars/m04.webp", label: "Angler Freak" },
+  { id: "🦁", src: "/avatars/m05.webp", label: "Zombie Teddy" },
+  { id: "🐸", src: "/avatars/m06.webp", label: "Hypno Toad" },
+  { id: "🐵", src: "/avatars/m07.webp", label: "Aviator Roach" },
+  { id: "🐰", src: "/avatars/m08.webp", label: "Moldy Pizza" },
+  { id: "🐱", src: "/avatars/m09.webp", label: "Brain Jar" },
+  { id: "🐶", src: "/avatars/m10.webp", label: "Spider Tooth" },
+  { id: "🦉", src: "/avatars/m11.webp", label: "Soggy Sock" },
+  { id: "🐧", src: "/avatars/m12.webp", label: "Space Squid" },
+  { id: "🐢", src: "/avatars/m13.webp", label: "Swamp Squatch" },
+  { id: "🦄", src: "/avatars/m14.webp", label: "Bog Witch" },
+  { id: "🐙", src: "/avatars/m15.webp", label: "Toxic Skull" },
+];
+
+const PORTRAIT_BY_ID = new Map(MUTANT_PORTRAITS.map((m) => [m.id, m]));
+
+export function avatarPortrait(id: string) {
+  return PORTRAIT_BY_ID.get(id) ?? null;
+}
 
 const EYES = (y = 33, dx = 8.5, r = 2.6) =>
   `<circle cx="${32 - dx}" cy="${y}" r="${r}" fill="#241916"/><circle cx="${32 + dx}" cy="${y}" r="${r}" fill="#241916"/>
@@ -189,18 +214,36 @@ const ART: Record<string, string> = {
     <path d="M29.5 46.5Q32 49 34.5 46.5" fill="none" stroke="#2b1d1a" stroke-width="1.7" stroke-linecap="round"/>`,
 
   "🤖": `
-    <line x1="32" y1="16" x2="32" y2="9" stroke="#2b1d1a" stroke-width="2.4" stroke-linecap="round"/>
-    <circle cx="32" cy="8.5" r="3.6" fill="#ffbf5e" stroke="#2b1d1a" stroke-width="1.6"/>
-    <rect x="14" y="17" width="36" height="32" rx="10" fill="#89a8be" stroke="#2b1d1a" stroke-width="1.8"/>
-    <rect x="19" y="23" width="26" height="12" rx="5" fill="#1e2a38"/>
-    <circle cx="26.5" cy="29" r="3.2" fill="#6ee7b7"/><circle cx="37.5" cy="29" r="3.2" fill="#6ee7b7"/>
-    <rect x="23" y="39" width="18" height="4.5" rx="2.2" fill="#2b3a4a"/>
-    <path d="M27 39v4.5M32 39v4.5M37 39v4.5" stroke="#cfe2ef" stroke-width="1.5"/>`,
+    <rect x="0" y="0" width="64" height="64" fill="#2c1914"/>
+    <path d="M22 15 17 6M42 15 48 7" stroke="#c88a42" stroke-width="2.4" stroke-linecap="round"/>
+    <circle cx="17" cy="6" r="3" fill="#a8ff3e" stroke="#1a110e" stroke-width="1.5"/>
+    <circle cx="48" cy="7" r="2.6" fill="#ff5e3a" stroke="#1a110e" stroke-width="1.5"/>
+    <path d="M13 21C13 15 21 13 32 13 43 13 51 15 51 21L49 47C49 52 41 55 32 55 23 55 15 52 15 47Z" fill="#7c8778" stroke="#1a110e" stroke-width="2.4"/>
+    <path d="M15 25l8 2-4 7M49 27l-7 3 5 6" fill="none" stroke="#503727" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="24" cy="29" r="7.2" fill="#1b1414" stroke="#1a110e" stroke-width="2"/>
+    <circle cx="24" cy="29" r="4.5" fill="#c6ff42"/>
+    <circle cx="25" cy="28.5" r="1.8" fill="#1b1414"/>
+    <circle cx="41" cy="28" r="5.4" fill="#1b1414" stroke="#1a110e" stroke-width="2"/>
+    <circle cx="41" cy="28" r="3" fill="#ff5436"/>
+    <circle cx="40.5" cy="28" r="1.2" fill="#fff"/>
+    <path d="M19 41Q32 49 45 40L44 48Q32 54 20 48Z" fill="#1b1414"/>
+    <path d="M22 42l3 4 3-3 4 4 4-4 3 3 3-4" fill="none" stroke="#f0d98c" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M35 47v7" stroke="#a8ff3e" stroke-width="2.4" stroke-linecap="round"/>`,
 };
 
-/** Render a cohesive storybook SVG badge for a known avatar id, or null if unknown. */
-export function avatarSvg(id: string): string | null {
+/** Render a painted mutant portrait <img> or fallback illustrated SVG badge for an avatar id. */
+export function avatarArt(id: string): { html: string; kind: "pic" | "svg" } | null {
+  const p = PORTRAIT_BY_ID.get(id);
+  if (p) {
+    return {
+      kind: "pic",
+      html: `<img class="av-img" src="${p.src}" alt="${p.label}" loading="lazy" decoding="async" draggable="false"/>`,
+    };
+  }
   const inner = ART[id];
   if (!inner) return null;
-  return `<svg class="av-svg" viewBox="0 0 64 64" aria-hidden="true">${inner}</svg>`;
+  return {
+    kind: "svg",
+    html: `<svg class="av-svg" viewBox="0 0 64 64" aria-hidden="true">${inner}</svg>`,
+  };
 }

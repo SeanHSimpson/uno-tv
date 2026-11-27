@@ -58,6 +58,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       <button class="btn btn-ghost" id="rm-hit" hidden></button>
       <button class="btn btn-danger" id="rm-discard" hidden>Discard</button>
     </footer>
+    <div class="rm-swipe-cue" id="rm-swipe-cue" aria-hidden="true"></div>
     <section class="sheet" id="rm-hit-sheet" hidden></section>
     <section class="sheet glance-sheet" id="rm-glance" hidden></section>
     <section class="ph-results overlay" id="rm-results" hidden></section>
@@ -165,8 +166,33 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       return;
     }
   });
+  // Upward swipe on selected cards lays down your contract, adds to a group, or discards!
+  // Sideways drag still rearranges cards freely.
+  let swipe: {
+    els: HTMLElement[];
+    kind: "lay" | "hit" | "discard";
+    x0: number;
+    y0: number;
+    pointer: number;
+    active: boolean;
+  } | null = null;
+  let suppressClick = false;
+
+  function swipeActionFor(id: number): "lay" | "hit" | "discard" | null {
+    if (!me || !state || !me.canPlay || pendingAct || !selected.has(id)) return null;
+    const cards = selectedCards();
+    if (!me.down && cards.length >= 3) {
+      const ev = evalSelected(cards, me, state);
+      if (ev.whole || !!ev.part) return "lay";
+    }
+    if (me.down && fittingMelds().length > 0) return "hit";
+    if (cards.length === 1) return "discard";
+    return null;
+  }
+
   const reorder = attachReorder(hand, {
     signal: ac.signal,
+    canStart: (dx, dy) => !swipe?.active && (dy > -10 || Math.abs(dx) >= Math.abs(dy)),
     onMove: () => fitHand(hand, arranger, 120),
     onDrop: (ids) => {
       arranger.setOrder(ids);
@@ -174,7 +200,92 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       render();
     },
   });
+
+  hand.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (!e.isPrimary) return;
+      const el = (e.target as HTMLElement).closest<HTMLElement>(".pcard");
+      if (!el) return;
+      const kind = swipeActionFor(Number(el.dataset.id));
+      if (!kind) return;
+      const els = [...hand.querySelectorAll<HTMLElement>(":scope > .pcard.selected")];
+      if (els.length) swipe = { els, kind, x0: e.clientX, y0: e.clientY, pointer: e.pointerId, active: false };
+    },
+    { signal: ac.signal },
+  );
+  const swipeThreshold = () => Math.min(95, Math.max(58, hand.clientHeight * 0.16));
+  const cueEl = () => document.getElementById("rm-swipe-cue");
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      if (!swipe || e.pointerId !== swipe.pointer) return;
+      if (reorder.dragging()) return void (swipe = null);
+      const dx = e.clientX - swipe.x0;
+      const dy = e.clientY - swipe.y0;
+      if (!swipe.active) {
+        if (dy > -14 || Math.abs(dy) <= Math.abs(dx) * 1.15) return;
+        swipe.active = true;
+        for (const el of swipe.els) el.classList.add("dragging");
+      }
+      const lift = Math.min(0, dy);
+      const armed = lift < -swipeThreshold();
+      for (const el of swipe.els) {
+        el.style.transform = `translate(${dx * 0.35}px, ${lift}px) scale(1.06)`;
+        el.classList.toggle("will-play", armed);
+      }
+      const cue = cueEl();
+      if (cue) {
+        cue.textContent =
+          swipe.kind === "lay"
+            ? armed
+              ? "Release to lay down! ✓"
+              : "Swipe up to lay down"
+            : swipe.kind === "hit"
+              ? armed
+                ? "Release to add to group!"
+                : "Swipe up to add"
+              : armed
+                ? "Release to discard!"
+                : "Swipe up to discard";
+        cue.className = `rm-swipe-cue show ${armed ? "armed" : ""} ${swipe.kind === "discard" ? "danger" : ""}`;
+      }
+    },
+    { signal: ac.signal },
+  );
+  const endSwipe = (e: PointerEvent) => {
+    if (!swipe || e.pointerId !== swipe.pointer) return;
+    const d = swipe;
+    swipe = null;
+    const cue = cueEl();
+    if (cue) cue.className = "rm-swipe-cue";
+    if (!d.active) return;
+    suppressClick = true;
+    setTimeout(() => (suppressClick = false), 300);
+    for (const el of d.els) {
+      el.classList.remove("dragging", "will-play");
+      el.style.transform = "";
+    }
+    const far = e.type === "pointerup" && e.clientY - d.y0 < -swipeThreshold();
+    if (!far) return;
+    if (d.kind === "lay") {
+      haptic("play");
+      sendAction("lay", { t: "layDown", cardIds: [...selected] });
+    } else if (d.kind === "hit") {
+      haptic("play");
+      triggerHit();
+    } else if (d.kind === "discard") {
+      triggerDiscard();
+    }
+  };
+  window.addEventListener("pointerup", endSwipe, { signal: ac.signal });
+  window.addEventListener("pointercancel", endSwipe, { signal: ac.signal });
+
   hand.addEventListener("click", (e) => {
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
     const el = (e.target as HTMLElement).closest<HTMLElement>(".pcard");
     if (!el) return;
     const id = Number(el.dataset.id);
@@ -184,11 +295,8 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     audio.tick();
     render();
   });
-  $("#rm-lay").addEventListener("click", () => {
-    haptic("select");
-    sendAction("lay", { t: "layDown", cardIds: [...selected] });
-  });
-  $("#rm-discard").addEventListener("click", () => {
+
+  function triggerDiscard() {
     const [id] = [...selected];
     if (id === undefined || !me) return;
     if (id === me.tookFromDiscard && me.hand.length > 1) {
@@ -199,9 +307,11 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     }
     haptic("select");
     sendAction("discard", { t: "discard", cardId: id });
-  });
-  $("#rm-hit").addEventListener("click", () => {
+  }
+
+  function triggerHit() {
     const fits = fittingMelds();
+    if (!fits.length) return;
     if (fits.length === 1) return hitInto(fits[0]!.id);
     const sheet = $("#rm-hit-sheet");
     sheet.innerHTML = `<h3>Add to which group?</h3>
@@ -214,7 +324,19 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
         .join("")}</div>
       <button class="btn btn-ghost wide" data-close>Cancel</button>`;
     ctx.openSheet(sheet);
+  }
+
+  $("#rm-lay").addEventListener("click", () => {
+    if (me?.canDraw) {
+      haptic("error");
+      toast("Draw a card from the deck or discard pile first, then lay down!");
+      return;
+    }
+    haptic("select");
+    sendAction("lay", { t: "layDown", cardIds: [...selected] });
   });
+  $("#rm-discard").addEventListener("click", triggerDiscard);
+  $("#rm-hit").addEventListener("click", triggerHit);
   $("#rm-hit-sheet").addEventListener("click", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>("[data-meld]");
     if (b) {
@@ -280,9 +402,14 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     const cards = selectedCards();
     const cantReturnDiscard = m.canPlay && cards.length === 1 && cards[0]!.id === m.tookFromDiscard && m.hand.length > 1;
     const ev = evalSelected(cards, m, s);
+    const contractReady = !m.down && (ev.whole || !!ev.part);
     const hint = cantReturnDiscard
       ? { ok: false, text: "You just picked that card up — pick a different card to discard." }
-      : ev.hint;
+      : contractReady && m.canDraw
+        ? { ok: true, text: `✓ Contract ready! Tap the deck or discard pile to draw first, then lay down.` }
+        : contractReady && !m.myTurn
+          ? { ok: true, text: `✓ Contract ready! Once it's your turn, draw and tap Lay down (or swipe up).` }
+          : ev.hint;
 
     // Nothing to tap until all my cards have landed.
     const canTake = m.canDraw && !dealing && !pendingAct;
@@ -327,17 +454,21 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     const playing = m.canPlay;
     const { whole, part } = ev;
     const contractOk = !m.down && (whole || !!part);
-    lay.hidden = !playing || m.down || cards.length < 3;
-    lay.disabled = !contractOk || !!pendingAct;
+    const showDrawFirst = m.canDraw && contractOk;
+    lay.hidden = (!playing && !showDrawFirst) || m.down || cards.length < 3;
+    lay.disabled = (!contractOk && !showDrawFirst) || !!pendingAct;
     lay.textContent =
       pendingAct === "lay"
         ? "Laying down…"
-        : whole
-          ? `Lay down ✓`
-          : part
-            ? `Lay down ${contractLabel(part.used)} ✓`
-            : `Lay down (${cards.length} selected)`;
-    lay.classList.toggle("ready", contractOk && !pendingAct);
+        : showDrawFirst
+          ? "Draw first to lay down"
+          : whole
+            ? `Lay down ✓ (or swipe up)`
+            : part
+              ? `Lay down ${contractLabel(part.used)} ✓`
+              : `Lay down (${cards.length} selected)`;
+    lay.classList.toggle("ready", playing && contractOk && !pendingAct);
+    lay.classList.toggle("draw-first", showDrawFirst);
     const fits = playing && m.down ? fittingMelds() : [];
     hit.hidden = !fits.length;
     hit.disabled = !!pendingAct;

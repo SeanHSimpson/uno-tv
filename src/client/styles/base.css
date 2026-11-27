@@ -320,16 +320,28 @@ body > .flyer-3d {
 }
 .avatar.art {
   overflow: hidden;
-  padding: 2px;
+  padding: 0;
 }
-.av-svg {
+.avatar.pic {
+  overflow: hidden;
+  padding: 0;
+  background: #1a1412;
+}
+.av-svg,
+.av-img {
   display: block;
   width: 100%;
   height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 .avatar-choice .av-svg {
   width: 86%;
   height: 86%;
+}
+.avatar-choice .av-img {
+  width: 100%;
+  height: 100%;
 }
 .crown {
   display: inline-flex;
@@ -374,19 +386,23 @@ body > .flyer-3d {
 }
 .avatar-picker {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
 }
 .avatar-choice {
   aspect-ratio: 1;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 246, 230, 0.08);
+  background: #1a1412;
   font-size: 1.45rem;
   line-height: 1;
   display: grid;
   place-items: center;
   padding: 0;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 2px rgba(255, 246, 230, 0.2),
+    0 4px 10px rgba(0, 0, 0, 0.38);
   transition:
     transform 0.12s,
     background 0.15s,
@@ -394,12 +410,15 @@ body > .flyer-3d {
 }
 .avatar-choice.on {
   background: rgba(255, 191, 94, 0.25);
-  box-shadow: 0 0 0 3px var(--amber);
-  transform: scale(1.08);
+  box-shadow:
+    0 0 0 3.5px var(--amber),
+    0 0 16px rgba(255, 191, 94, 0.45);
+  transform: scale(1.07);
 }
 @media (max-width: 380px) {
   .avatar-picker {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
   }
 }
 .avatar-edit {
@@ -424,8 +443,8 @@ body > .flyer-3d {
   place-items: center;
 }
 #avatar-sheet .avatar-picker {
-  grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 #avatar-sheet .avatar-choice {
   font-size: 1.8rem;

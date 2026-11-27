@@ -1,5 +1,4 @@
-import { AVATARS } from "../shared/common";
-import { avatarSvg } from "./avatars";
+import { avatarArt, MUTANT_PORTRAITS } from "./avatars";
 
 /** Tiny tagged-template helper that escapes interpolated values. */
 export function esc(v: unknown): string {
@@ -18,16 +17,17 @@ export const avatarColor = (hue: number) => AVATAR[hue % AVATAR.length]!;
 
 export function avatar(p: { name: string; hue: number; bot?: boolean; avatar?: string | null }, cls = ""): string {
   const pic = p.bot ? "🤖" : p.avatar;
-  const svg = pic ? avatarSvg(pic) : null;
-  const face = svg ?? (pic ? esc(pic) : esc([...p.name.trim()][0]?.toUpperCase() ?? "?"));
-  return `<span class="avatar ${svg ? "art" : pic ? "emoji" : ""} ${cls}" style="--av:${avatarColor(p.hue)}">${face}</span>`;
+  const art = pic ? avatarArt(pic) : null;
+  const face = art?.html ?? (pic ? esc(pic) : esc([...p.name.trim()][0]?.toUpperCase() ?? "?"));
+  const kindCls = art ? (art.kind === "pic" ? "pic" : "art") : pic ? "emoji" : "";
+  return `<span class="avatar ${kindCls} ${cls}" style="--av:${avatarColor(p.hue)}">${face}</span>`;
 }
 
-/** Grid of pictures to choose from; `data-avatar` on each button. */
+/** Grid of mutant portraits to choose from; `data-avatar` on each button. */
 export function avatarPicker(selected: string | null): string {
-  return `<div class="avatar-picker" role="radiogroup" aria-label="Pick your picture">${AVATARS.map(
-    (a) =>
-      `<button type="button" class="avatar-choice ${a === selected ? "on" : ""}" data-avatar="${a}" role="radio" aria-checked="${a === selected}" aria-label="${a}">${avatarSvg(a) ?? a}</button>`,
+  return `<div class="avatar-picker" role="radiogroup" aria-label="Pick your mutant avatar">${MUTANT_PORTRAITS.map(
+    (m) =>
+      `<button type="button" class="avatar-choice ${m.id === selected ? "on" : ""}" data-avatar="${m.id}" role="radio" aria-checked="${m.id === selected}" title="${esc(m.label)}" aria-label="${esc(m.label)}"><img class="av-img" src="${m.src}" alt="${esc(m.label)}" loading="lazy" decoding="async" draggable="false"/></button>`,
   ).join("")}</div>`;
 }
 

@@ -729,8 +729,10 @@ button.game-card:active {
   display: flex;
   flex-direction: column;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  overflow: hidden;
 }
 .ph-top {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;

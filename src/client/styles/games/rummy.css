@@ -340,9 +340,15 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+.rummy-phone > .rm-status,
+.rummy-phone > .hand-toolbar {
+  flex: none;
 }
 .rummy-phone > .rm-hand {
   flex: 1 1 0;
+  min-height: 120px;
 }
 .rm-status {
   margin: 0 16px;
@@ -467,14 +473,17 @@
   font-size: 0.8rem;
 }
 .rm-actions {
+  flex: none;
+  position: relative;
+  z-index: 12;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 10px 16px 14px;
+  padding: 8px 16px max(14px, env(safe-area-inset-bottom));
 }
 /* On your turn the button row keeps its height so the hand doesn't jump as buttons come and go. */
 .my-turn .rm-actions {
-  min-height: calc(52px + 24px);
+  min-height: calc(52px + 22px);
 }
 .rm-actions .btn {
   flex: 1 1 auto;
@@ -483,9 +492,43 @@
 #rm-lay.ready {
   animation: lay-ready-pulse 1.3s ease-in-out infinite;
 }
+#rm-lay.draw-first {
+  opacity: 0.82;
+}
 #rm-discard.blocked {
   opacity: 0.52;
   filter: saturate(0.5);
+}
+.rm-swipe-cue {
+  position: fixed;
+  left: 50%;
+  top: 22vh;
+  transform: translateX(-50%) scale(0.92);
+  z-index: 60;
+  padding: 9px 18px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffd285, #f3a23c);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.48);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.14s, transform 0.14s;
+}
+.rm-swipe-cue.show {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+.rm-swipe-cue.armed {
+  background: linear-gradient(180deg, #8be098, #4ba85e);
+  color: #102415;
+  transform: translateX(-50%) scale(1.08);
+}
+.rm-swipe-cue.danger.armed {
+  background: linear-gradient(180deg, #ff7b63, #d9432f);
+  color: #fff;
 }
 @keyframes lay-ready-pulse {
   50% {
