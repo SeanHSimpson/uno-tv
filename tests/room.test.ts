@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GameError } from "../src/shared/common";
+import { cleanEmote, GameError } from "../src/shared/common";
 import type { GameState } from "../src/shared/games/ohno/types";
 import type { HushState } from "../src/shared/games/hush/engine";
 import * as R from "../src/shared/room";
@@ -247,6 +247,28 @@ describe("bots through the room", () => {
     R.leave(r, bob, seeded(10));
     expect(r.members.map((m) => m.name)).toEqual(["Ann", "Cat"]);
     expect(r.hostId).toBe(ann);
+  });
+
+  it("returning player activity restores connected status on room and game", () => {
+    const r = lobby("Ann", "Bob");
+    const ann = pid(r, "Ann");
+    R.start(r, ann, seeded(21));
+    R.setConnected(r, ann, false, seeded(22));
+    expect(r.members.find((m) => m.id === ann)?.connected).toBe(false);
+    expect((r.game as GameState).players.find((p) => p.id === ann)?.connected).toBe(false);
+
+    // Sending hello (returning from phone background) or any message restores connected=true.
+    R.handle(r, ann, { t: "hello" }, seeded(23));
+    expect(r.members.find((m) => m.id === ann)?.connected).toBe(true);
+    expect((r.game as GameState).players.find((p) => p.id === ann)?.connected).toBe(true);
+  });
+
+  it("cleanEmote accepts built-in ids and sanitized custom reactions", () => {
+    expect(cleanEmote("fire")).toEqual({ icon: "🔥", label: "On fire!" });
+    expect(cleanEmote({ icon: "🐢", label: "  Hurry <b>up</b>!  " })).toEqual({ icon: "🐢", label: "Hurry bup/b!" });
+    expect(cleanEmote({ icon: "💀", label: "" })).toEqual({ icon: "💀", label: "" });
+    expect(cleanEmote({ icon: "", label: "" })).toBeNull();
+    expect(cleanEmote("nonexistent")).toBeNull();
   });
 
   it("OhNo! 7-0 rule swaps hands on 7 and rotates hands on 0", () => {

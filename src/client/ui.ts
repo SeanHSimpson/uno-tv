@@ -1,4 +1,5 @@
 import { AVATARS } from "../shared/common";
+import { avatarSvg } from "./avatars";
 
 /** Tiny tagged-template helper that escapes interpolated values. */
 export function esc(v: unknown): string {
@@ -17,14 +18,16 @@ export const avatarColor = (hue: number) => AVATAR[hue % AVATAR.length]!;
 
 export function avatar(p: { name: string; hue: number; bot?: boolean; avatar?: string | null }, cls = ""): string {
   const pic = p.bot ? "🤖" : p.avatar;
-  const face = pic ? esc(pic) : esc([...p.name.trim()][0]?.toUpperCase() ?? "?");
-  return `<span class="avatar ${pic ? "emoji" : ""} ${cls}" style="--av:${avatarColor(p.hue)}">${face}</span>`;
+  const svg = pic ? avatarSvg(pic) : null;
+  const face = svg ?? (pic ? esc(pic) : esc([...p.name.trim()][0]?.toUpperCase() ?? "?"));
+  return `<span class="avatar ${svg ? "art" : pic ? "emoji" : ""} ${cls}" style="--av:${avatarColor(p.hue)}">${face}</span>`;
 }
 
 /** Grid of pictures to choose from; `data-avatar` on each button. */
 export function avatarPicker(selected: string | null): string {
   return `<div class="avatar-picker" role="radiogroup" aria-label="Pick your picture">${AVATARS.map(
-    (a) => `<button type="button" class="avatar-choice ${a === selected ? "on" : ""}" data-avatar="${a}" role="radio" aria-checked="${a === selected}">${a}</button>`,
+    (a) =>
+      `<button type="button" class="avatar-choice ${a === selected ? "on" : ""}" data-avatar="${a}" role="radio" aria-checked="${a === selected}" aria-label="${a}">${avatarSvg(a) ?? a}</button>`,
   ).join("")}</div>`;
 }
 
@@ -81,29 +84,73 @@ export function keepAwake() {
   window.addEventListener("pointerdown", request, { passive: true });
 }
 
-/** Fly a clone of `el` from one rect to another (Web Animations API). */
-export function fly(el: HTMLElement, from: DOMRect, to: DOMRect, opts: { duration?: number; delay?: number; spin?: number } = {}) {
-  const { duration = 520, delay = 0, spin = 0 } = opts;
-  el.classList.add("flyer");
-  el.style.width = `${to.width}px`;
-  el.style.height = `${to.height}px`;
-  el.style.left = `${to.left}px`;
-  el.style.top = `${to.top}px`;
-  document.body.append(el);
-  const sx = from.width / to.width;
+/** Fly `el` from one rect to another with a tactile 3D lift arc and optional back-to-face flip. */
+export function fly(
+  el: HTMLElement,
+  from: DOMRect,
+  to: DOMRect,
+  opts: { duration?: number; delay?: number; spin?: number; flipFrom?: HTMLElement } = {},
+) {
+  const { duration = 520, delay = 0, spin = 0, flipFrom } = opts;
+  const sx = from.width / Math.max(1, to.width);
   const dx = from.left + from.width / 2 - (to.left + to.width / 2);
   const dy = from.top + from.height / 2 - (to.top + to.height / 2);
-  const anim = el.animate(
+
+  let host: HTMLElement = el;
+  if (flipFrom) {
+    const wrap = document.createElement("div");
+    wrap.className = "flyer flyer-3d";
+    wrap.style.width = `${to.width}px`;
+    wrap.style.height = `${to.height}px`;
+    wrap.style.left = `${to.left}px`;
+    wrap.style.top = `${to.top}px`;
+    const inner = document.createElement("div");
+    inner.className = "flyer-flip";
+    flipFrom.classList.add("flyer-face", "flyer-back");
+    el.classList.add("flyer-face", "flyer-front");
+    inner.append(flipFrom, el);
+    wrap.append(inner);
+    document.body.append(wrap);
+    host = wrap;
+    inner.animate([{ transform: "rotateY(180deg)" }, { transform: "rotateY(0deg)" }], {
+      duration: Math.round(duration * 0.82),
+      delay: delay + Math.round(duration * 0.08),
+      easing: "cubic-bezier(.2,.85,.25,1)",
+      fill: "both",
+    });
+  } else {
+    el.classList.add("flyer");
+    el.style.width = `${to.width}px`;
+    el.style.height = `${to.height}px`;
+    el.style.left = `${to.left}px`;
+    el.style.top = `${to.top}px`;
+    document.body.append(el);
+  }
+
+  const anim = host.animate(
     [
-      { transform: `translate(${dx}px, ${dy}px) scale(${sx}) rotate(${spin}deg)`, opacity: 0.4 },
-      { opacity: 1, offset: 0.2 },
-      { transform: "translate(0,0) scale(1) rotate(0deg)", opacity: 1 },
+      {
+        transform: `perspective(900px) translate(${dx}px, ${dy}px) scale(${sx}) rotate(${spin}deg)`,
+        opacity: 0.45,
+        filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.35))",
+      },
+      {
+        transform: `perspective(900px) translate(${dx * 0.45}px, ${dy * 0.45 - 18}px) scale(${Math.max(sx, 1) * 1.07}) rotate(${spin * 0.35}deg)`,
+        opacity: 1,
+        filter: "drop-shadow(0 20px 24px rgba(0,0,0,0.5))",
+        offset: 0.42,
+      },
+      {
+        transform: "perspective(900px) translate(0,0) scale(1) rotate(0deg)",
+        opacity: 1,
+        filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.35))",
+      },
     ],
     { duration, delay, easing: "cubic-bezier(.2,.8,.25,1)", fill: "backwards" },
   );
   // Background tabs throttle animations; never leave a stray card on screen.
-  const failsafe = setTimeout(() => el.remove(), delay + duration + 800);
-  return anim.finished.then(() => el.remove()).catch(() => el.remove()).finally(() => clearTimeout(failsafe));
+  const failsafe = setTimeout(() => host.remove(), delay + duration + 800);
+  return anim.finished.then(() => host.remove()).catch(() => host.remove()).finally(() => clearTimeout(failsafe));
 }
 
 export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;

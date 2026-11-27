@@ -1,11 +1,12 @@
 // The TV: header, the hub lobby (pick a game, QR code), music, and whichever game is running.
 
 import QRCode from "qrcode";
-import { EMOTES, type EmoteId } from "../../shared/common";
+import type { CustomEmote } from "../../shared/common";
 import { GAMES } from "../../shared/games";
 import type { GameId } from "../../shared/games/types";
 import type { RoomPublic } from "../../shared/room";
 import { audio, loadPref, savePref, unlockOnFirstGesture } from "../audio";
+import { tvFx } from "../fxCanvas";
 import { SCREENS } from "../games";
 import type { GameView } from "../games/types";
 import { gameEmblem, icoClose, icoCrown, icoMusic, icoSound } from "../icons";
@@ -73,18 +74,22 @@ export function mountTv(root: HTMLElement, code: string) {
     onError: (m) => toast(m, "error"),
     onFatal(m) {
       view?.destroy();
+      tvFx.unmount();
       root.innerHTML = `<div class="fatal"><div class="logo">Oh<span>No!</span></div><p>${esc(m)}</p><a class="btn btn-primary" href="/">Start over</a></div>`;
     },
     onStatus(ok) {
       $("#conn-lost").hidden = ok;
     },
   });
+  tvFx.mount();
+  tvFx.setTheme("lobby");
 
   function handle(snap: Snapshot) {
     room = snap.room;
     const inLobby = room.phase === "lobby" || !snap.game;
     $("#tv-lobby").hidden = !inLobby;
     if (inLobby) {
+      tvFx.setTheme("lobby");
       renderLobby(room);
       if (view) {
         view.destroy();
@@ -94,6 +99,7 @@ export function mountTv(root: HTMLElement, code: string) {
       $("#tv-status").innerHTML = "";
     } else {
       const game = snap.game!;
+      tvFx.setTheme(game.id);
       let first = false;
       if (viewId !== game.id) {
         view?.destroy();
@@ -143,23 +149,33 @@ export function mountTv(root: HTMLElement, code: string) {
 
   // ---------------- emotes, turn timer, rules, now playing ----------------
 
-  function showEmote(pid: string, emoteId: EmoteId) {
-    const em = EMOTES.find((x) => x.id === emoteId);
-    if (!em) return;
+  function showEmote(pid: string, em: CustomEmote) {
+    if (!em?.icon && !em?.label) return;
     audio.pop();
-    const target = root.querySelector<HTMLElement>(`[data-pid="${CSS.escape(pid)}"]`);
+    // Only search the currently visible surface (never match a hidden #tv-lobby pill mid-game).
+    const scope = $("#tv-lobby").hidden ? $("#tv-game") : $("#tv-lobby");
+    const target = scope.querySelector<HTMLElement>(`[data-pid="${CSS.escape(pid)}"]`);
+    const rect = target?.getBoundingClientRect();
+    const visible = !!rect && rect.width > 0 && rect.height > 0;
+    const who = room?.members.find((m) => m.id === pid)?.name;
+
     const b = document.createElement("div");
-    b.className = "emote-bubble";
-    b.innerHTML = `<span>${em.icon}</span><small>${esc(em.label)}</small>`;
-    if (target) {
-      target.append(b);
+    b.className = `emote-bubble${em.label ? "" : " icon-only"}`;
+    const labelText = visible ? em.label : [who, em.label].filter(Boolean).join(em.label ? ": " : "");
+    b.innerHTML = `<span class="em-ico">${esc(em.icon)}</span>${labelText ? `<small>${esc(labelText)}</small>` : ""}`;
+
+    // Always mount fixed on document.body so game containers with overflow:hidden (like Rummy's
+    // .rm-boards or .tv) can never clip the bubble off-screen.
+    if (visible && rect) {
+      const cx = Math.max(innerWidth * 0.12, Math.min(innerWidth * 0.88, rect.left + rect.width / 2));
+      const cy = Math.max(innerHeight * 0.14, Math.min(innerHeight * 0.86, rect.top + 8));
+      b.style.left = `${cx}px`;
+      b.style.top = `${cy}px`;
     } else {
-      const who = room?.members.find((m) => m.id === pid)?.name;
-      if (who) b.innerHTML = `<span>${em.icon}</span><small>${esc(who)}: ${esc(em.label)}</small>`;
       b.classList.add("emote-float");
-      root.append(b);
     }
-    setTimeout(() => b.remove(), 2200);
+    document.body.append(b);
+    setTimeout(() => b.remove(), 2300);
   }
 
   let timerHandle = 0;

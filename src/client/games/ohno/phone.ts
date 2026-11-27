@@ -3,7 +3,7 @@
 import { COLORS, type Card, type Color, type GameEvent, type PrivateState, type PublicState } from "../../../shared/games/ohno/types";
 import { audio, haptic, loadPref, savePref } from "../../audio";
 import { byColor, byNumber, cardEl, COLOR_NAMES, shapeSvg, shortLabel } from "../../cards";
-import { attachReorder, HandArranger, type SortMode } from "../../handArrange";
+import { animateCardFlip, attachReorder, captureCardRects, HandArranger, type SortMode } from "../../handArrange";
 import { confetti } from "../../fx";
 import { icoBolt } from "../../icons";
 import { $, avatar, esc, fly, reducedMotion, toast } from "../../ui";
@@ -147,9 +147,11 @@ export function ohnoPhone(ctx: PhoneCtx): GameView {
       }
       const b = t.closest<HTMLElement>("[data-sort]");
       if (!b) return;
+      const before = captureCardRects(hand, ".card");
       arranger.setMode(b.dataset.sort as SortMode);
       haptic("select");
       renderHand();
+      animateCardFlip(hand, before, ".card");
     },
     on,
   );

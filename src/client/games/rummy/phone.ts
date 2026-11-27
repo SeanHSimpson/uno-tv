@@ -1,11 +1,11 @@
 // Contract Rummy on a phone: draw, pick cards, lay down, add to groups, discard.
 
-import { canAdd, contractLabel, findContract, partOfContract, type PCard } from "../../../shared/games/rummy/cards";
+import { canAdd, contractLabel, type PCard } from "../../../shared/games/rummy/cards";
 import type { RummyEvent, RummyPrivate, RummyPublic } from "../../../shared/games/rummy/engine";
-import { selectionHint } from "../../../shared/games/rummy/hint";
+import { evaluateSelection, type SelectionEval } from "../../../shared/games/rummy/hint";
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
-import { attachReorder, fitHand, HandArranger, type SortMode } from "../../handArrange";
+import { animateCardFlip, attachReorder, captureCardRects, fitHand, HandArranger, type SortMode } from "../../handArrange";
 import { icoEye } from "../../icons";
 import { pcardEl, pcardHtml, shortCard } from "../../playingCards";
 import { $, avatar, esc, reducedMotion, toast } from "../../ui";
@@ -22,11 +22,16 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   let isHost = false;
   let selected = new Set<number>();
   // Cards that just came into your hand wear a "New" badge for a while.
-  const fresh = new NewCards(() => me && renderHand());
+  const fresh = new NewCards(() => me && renderHand(true));
   let wasMyTurn = false;
   /** While the TV is dealing: when it started and when each of my cards lands on my board there. */
   let dealing: { start: number; lands: number[] } | null = null;
   let dealTimers: ReturnType<typeof setTimeout>[] = [];
+  /** In-flight action guard so taps feel immediate and double-taps can't collide. */
+  let pendingAct: string | null = null;
+  let pendingTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Memoized contract evaluation so repeated renders don't re-run the solver. */
+  let evalCache: { key: string; res: SelectionEval } | null = null;
   const rankOf = (c: PCard) => c.rank || 99;
   // Suit order everywhere: clubs, diamonds, spades, hearts (colors alternate); jokers last.
   const ROW_SUITS = ["C", "D", "S", "H"];
@@ -63,6 +68,36 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   const name = (id: string) => esc(state?.players.find((p) => p.id === id)?.name ?? "someone");
   const selectedCards = (): PCard[] => (me?.hand ?? []).filter((c) => selected.has(c.id));
 
+  function clearPending() {
+    pendingAct = null;
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      pendingTimer = null;
+    }
+  }
+  function sendAction(kind: string, action: unknown) {
+    if (pendingAct) return;
+    pendingAct = kind;
+    if (pendingTimer) clearTimeout(pendingTimer);
+    pendingTimer = setTimeout(() => {
+      pendingAct = null;
+      pendingTimer = null;
+      render();
+    }, 3500);
+    send(action);
+    render();
+  }
+
+  function evalSelected(cards: PCard[], m: RummyPrivate, s: RummyPublic): SelectionEval {
+    if (m.down || s.phase !== "playing" || !cards.length) return { hint: null, whole: false, part: null };
+    const started = m.left.sets + m.left.runs < s.contract.sets + s.contract.runs;
+    const key = `${cards.map((c) => c.id).join(",")}|${m.left.sets},${m.left.runs}|${s.parts ? 1 : 0}|${started ? 1 : 0}`;
+    if (evalCache?.key === key) return evalCache.res;
+    const res = evaluateSelection(cards, m.left, { parts: s.parts, started });
+    evalCache = { key, res };
+    return res;
+  }
+
   // The deck and the discard pile at the top: tap one to draw from it on your turn. On someone
   // else's turn, tap the discard pile twice for "May I?" (the second tap confirms, since it costs
   // a penalty card if you get it).
@@ -73,8 +108,8 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     if (!pile || !me || !state || dealing) return;
     if (me.canDraw) {
       if (pile === "discard" && !state.discardTop) return;
-      send({ t: "draw", from: pile === "discard" ? "discard" : "stock" });
       haptic("select");
+      sendAction("draw", { t: "draw", from: pile === "discard" ? "discard" : "stock" });
       return;
     }
     if (pile !== "discard") return;
@@ -87,8 +122,8 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     }
     if (Date.now() < mayIArmed) {
       mayIArmed = 0;
-      send({ t: "mayI" });
       haptic("select");
+      sendAction("mayI", { t: "mayI" });
     } else {
       mayIArmed = Date.now() + 3000;
       haptic("select");
@@ -108,17 +143,27 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     const t = e.target as HTMLElement;
     const sort = t.closest<HTMLElement>("[data-sort]");
     if (sort) {
+      const before = captureCardRects(hand);
       const note = arranger.setMode(sort.dataset.sort as SortMode);
       if (note) toast(note);
+      haptic("select");
+      render();
+      animateCardFlip(hand, before);
+      return;
     }
-    else if (t.closest("[data-layout]")) arranger.toggleLayout();
-    else if (t.closest("[data-glance]")) {
+    if (t.closest("[data-layout]")) {
+      const before = captureCardRects(hand);
+      arranger.toggleLayout();
+      haptic("select");
+      render();
+      animateCardFlip(hand, before);
+      return;
+    }
+    if (t.closest("[data-glance]")) {
       renderGlance();
       ctx.openSheet($("#rm-glance"));
       return;
-    } else return;
-    haptic("select");
-    render();
+    }
   });
   const reorder = attachReorder(hand, {
     signal: ac.signal,
@@ -139,10 +184,21 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     audio.tick();
     render();
   });
-  $("#rm-lay").addEventListener("click", () => send({ t: "layDown", cardIds: [...selected] }));
+  $("#rm-lay").addEventListener("click", () => {
+    haptic("select");
+    sendAction("lay", { t: "layDown", cardIds: [...selected] });
+  });
   $("#rm-discard").addEventListener("click", () => {
     const [id] = [...selected];
-    if (id !== undefined) send({ t: "discard", cardId: id });
+    if (id === undefined || !me) return;
+    if (id === me.tookFromDiscard && me.hand.length > 1) {
+      haptic("error");
+      audio.error();
+      toast("You just picked that card up — discard a different card.", "error");
+      return;
+    }
+    haptic("select");
+    sendAction("discard", { t: "discard", cardId: id });
   });
   $("#rm-hit").addEventListener("click", () => {
     const fits = fittingMelds();
@@ -169,7 +225,8 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
   window.addEventListener("resize", () => layoutHand(), { signal: ac.signal });
 
   function hitInto(meldId: number) {
-    send({ t: "hit", cardIds: [...selected], meldId });
+    haptic("select");
+    sendAction("hit", { t: "hit", cardIds: [...selected], meldId });
   }
 
   function fittingMelds() {
@@ -179,6 +236,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
 
   function update(snap: GameSnap<RummyPublic, RummyPrivate>) {
     const receivedAt = performance.now();
+    clearPending();
     state = snap.pub;
     me = snap.me;
     if (me) fresh.update(me.hand.map((c) => c.id));
@@ -220,25 +278,30 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
     // Say what the selection makes, so a greyed-out "Lay down" is never a mystery. It takes the
     // message's place up here, so the hand doesn't jump when it appears.
     const cards = selectedCards();
-    const started = m.left.sets + m.left.runs < s.contract.sets + s.contract.runs;
-    const hint = !m.down && s.phase === "playing" && cards.length ? selectionHint(cards, m.left, { parts: s.parts, started }) : null;
+    const cantReturnDiscard = m.canPlay && cards.length === 1 && cards[0]!.id === m.tookFromDiscard && m.hand.length > 1;
+    const ev = evalSelected(cards, m, s);
+    const hint = cantReturnDiscard
+      ? { ok: false, text: "You just picked that card up — pick a different card to discard." }
+      : ev.hint;
 
     // Nothing to tap until all my cards have landed.
-    const canTake = m.canDraw && !dealing;
-    const canMayI = m.canMayI && !dealing && !!s.discardTop;
+    const canTake = m.canDraw && !dealing && !pendingAct;
+    const canMayI = m.canMayI && !dealing && !pendingAct && !!s.discardTop;
     const armed = canMayI && Date.now() < mayIArmed;
     const asked = s.mayI.includes(pid);
     const discardLabel = canTake
       ? s.discardTop
         ? "Tap to take"
         : "Empty"
-      : armed
-        ? "Tap again"
-        : asked
-          ? "May I? ✓"
-          : canMayI
-            ? `May I? (${m.buysLeft})`
-            : "Discard";
+      : pendingAct === "draw"
+        ? "Drawing…"
+        : armed
+          ? "Tap again"
+          : asked
+            ? "May I? ✓"
+            : canMayI
+              ? `May I? (${m.buysLeft})`
+              : "Discard";
     $("#rm-status").innerHTML = `
       <div class="rm-status-text">
         <div class="rm-chip"><small>Round ${s.round}/${s.rounds}</small><b>${esc(s.contractText)}</b>${
@@ -248,47 +311,56 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       </div>
       <div class="rm-ph-piles">
         <button class="rm-ph-pile ${canTake ? "live" : ""}" data-pile="stock" aria-label="Deck, ${s.stockCount} cards${canTake ? ". Tap to draw" : ""}">
-          ${pcardHtml(null, "rm-ph-top")}<small>${canTake ? "Tap to draw" : `Deck · ${s.stockCount}`}</small>
+          ${pcardHtml(null, "rm-ph-top")}<small>${pendingAct === "draw" ? "Drawing…" : canTake ? "Tap to draw" : `Deck · ${s.stockCount}`}</small>
         </button>
         <button class="rm-ph-pile ${canTake || canMayI ? "live" : ""} ${armed ? "armed" : ""}" data-pile="discard" aria-label="Discard pile${s.discardTop ? `, ${shortCard(s.discardTop)} on top` : ", empty"}. ${discardLabel}">
           ${s.discardTop ? pcardHtml(s.discardTop, "rm-ph-top") : `<div class="rm-ph-empty">Empty</div>`}<small>${discardLabel}</small>
         </button>
       </div>`;
 
-    renderHand();
+    renderHand(false);
 
     // Action buttons depend on what's selected.
     const lay = $("#rm-lay") as HTMLButtonElement;
     const hit = $("#rm-hit") as HTMLButtonElement;
     const dis = $("#rm-discard") as HTMLButtonElement;
     const playing = m.canPlay;
-    const whole = cards.length > 0 && !!findContract(cards, m.left, true);
-    const part = !whole && s.parts && cards.length > 0 ? partOfContract(cards, m.left) : null;
+    const { whole, part } = ev;
     const contractOk = !m.down && (whole || !!part);
     lay.hidden = !playing || m.down || cards.length < 3;
-    lay.disabled = !contractOk;
-    lay.textContent = whole ? `Lay down ✓` : part ? `Lay down ${contractLabel(part.used)} ✓` : `Lay down (${cards.length} selected)`;
-    lay.classList.toggle("ready", contractOk);
+    lay.disabled = !contractOk || !!pendingAct;
+    lay.textContent =
+      pendingAct === "lay"
+        ? "Laying down…"
+        : whole
+          ? `Lay down ✓`
+          : part
+            ? `Lay down ${contractLabel(part.used)} ✓`
+            : `Lay down (${cards.length} selected)`;
+    lay.classList.toggle("ready", contractOk && !pendingAct);
     const fits = playing && m.down ? fittingMelds() : [];
     hit.hidden = !fits.length;
-    hit.textContent = fits.length === 1 ? "Add to group" : `Add to a group (${fits.length})`;
+    hit.disabled = !!pendingAct;
+    hit.textContent = pendingAct === "hit" ? "Adding…" : fits.length === 1 ? "Add to group" : `Add to a group (${fits.length})`;
     dis.hidden = !playing || cards.length !== 1;
-    dis.disabled = cards.length === 1 && cards[0]!.id === m.tookFromDiscard && m.hand.length > 1;
+    dis.disabled = !!pendingAct;
+    dis.classList.toggle("blocked", cantReturnDiscard);
+    dis.textContent = pendingAct === "discard" ? "Discarding…" : "Discard";
 
     renderResults();
-    // The buttons change how much room the hand has: size the cards last.
+    // The buttons change how much room the hand has: size the cards last (once).
     layoutHand();
   }
 
 
   const partDown = (m: RummyPrivate) => !m.down && m.left.sets + m.left.runs < (state?.contract.sets ?? 0) + (state?.contract.runs ?? 0);
 
-  function renderHand() {
+  function renderHand(relayout = true) {
     const m = me!;
     $("#rm-tools").innerHTML = arranger.toolbar({ glance: `${icoEye(15)} Table` });
     // Don't yank the cards out from under a finger that's on one (maybe starting a drag).
     if (reorder.holding()) {
-      reorder.later(() => me && renderHand());
+      reorder.later(() => me && renderHand(true));
       return;
     }
     const arranged = arranger.arrange(m.hand);
@@ -319,8 +391,8 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       if (!dealing) for (const el of els) el.classList.remove("deal-in");
       hand.replaceChildren(...els);
     }
-    // Also covers the deferred reorder.later and NewCards paths that call renderHand alone.
-    layoutHand();
+    // Covers the deferred reorder.later and NewCards paths that call renderHand alone.
+    if (relayout) layoutHand();
   }
 
   /** How many of my cards have landed on the TV so far (all of them when nobody's dealing). */
@@ -452,6 +524,10 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
 
   return {
     update,
+    onError() {
+      clearPending();
+      render();
+    },
     hostMenu(snap: GameSnap<RummyPublic>) {
       const s = snap.pub;
       const cur = s.players.find((p) => p.id === s.turnId);
@@ -459,6 +535,7 @@ export function rummyPhone(ctx: PhoneCtx): GameView {
       return skip + tableSizeMenu(s.table, [1, 1.5, 2]);
     },
     destroy() {
+      clearPending();
       fresh.stop();
       if (mayITimer) clearTimeout(mayITimer);
       for (const t of dealTimers) clearTimeout(t);

@@ -5,7 +5,7 @@ import type { ECard, EuchreEvent, EuchrePrivate, EuchrePublic, Suit } from "../.
 import { effSuit, power, shortCard, SUIT_NAMES, SUITS, TEAM_EMOJI, TEAM_NAMES } from "../../../shared/games/euchre/engine";
 import { audio, haptic } from "../../audio";
 import { confetti } from "../../fx";
-import { attachReorder, fitHand, HandArranger, type SortMode } from "../../handArrange";
+import { animateCardFlip, attachReorder, captureCardRects, fitHand, HandArranger, type SortMode } from "../../handArrange";
 import { icoDice, icoEye, icoPlay, icoTrophy } from "../../icons";
 import { $, avatar, esc, reducedMotion, toast } from "../../ui";
 import { tableSizeMenu } from "../tableSize";
@@ -80,17 +80,27 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
     const t = e.target as HTMLElement;
     const sort = t.closest<HTMLElement>("[data-sort]");
     if (sort) {
+      const before = captureCardRects(hand);
       const note = arranger.setMode(sort.dataset.sort as SortMode);
       if (note) toast(note);
+      haptic("select");
+      render();
+      animateCardFlip(hand, before);
+      return;
     }
-    else if (t.closest("[data-layout]")) arranger.toggleLayout();
-    else if (t.closest("[data-glance]")) {
+    if (t.closest("[data-layout]")) {
+      const before = captureCardRects(hand);
+      arranger.toggleLayout();
+      haptic("select");
+      render();
+      animateCardFlip(hand, before);
+      return;
+    }
+    if (t.closest("[data-glance]")) {
       renderGlance();
       ctx.openSheet($("#eu-glance"));
       return;
-    } else return;
-    haptic("select");
-    render();
+    }
   });
   const reorder = attachReorder(hand, {
     signal: ac.signal,
@@ -338,7 +348,9 @@ export function euchrePhone(ctx: PhoneCtx): GameView {
         el.classList.toggle("just-drew", fresh.isNew(c.id));
         el.classList.toggle("playable", usable && selected !== c.id);
         el.classList.toggle("dim", m.myTurn && state?.phase === "play" && !usable);
-        el.classList.toggle("trump", !!state?.trump && isTrump(c.suit, c.rank, state.trump));
+        const trumpCard = !!state?.trump && isTrump(c.suit, c.rank, state.trump);
+        el.classList.toggle("trump", trumpCard);
+        el.classList.toggle("bower", trumpCard && c.rank === 11);
         el.setAttribute("role", "button");
         return el;
       }),

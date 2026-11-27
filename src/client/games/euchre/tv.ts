@@ -5,7 +5,8 @@
 import type { EuchreEvent, EuchrePublic } from "../../../shared/games/euchre/engine";
 import { shortCard, SUIT_NAMES, TEAM_EMOJI, TEAM_NAMES } from "../../../shared/games/euchre/engine";
 import { audio } from "../../audio";
-import { confetti } from "../../fx";
+import { callout, confetti } from "../../fx";
+import { tvFx } from "../../fxCanvas";
 import { icoClose, icoPlay } from "../../icons";
 import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
@@ -370,6 +371,10 @@ export function euchreTv(ctx: TvCtx): GameView {
         case "trump":
           audio.cardPlay("wild");
           bubble(e.pid, e.alone ? "Going alone!" : e.round === 1 ? "Order it up!" : `${SUIT_NAMES[e.suit]}!`, "good");
+          if (e.alone) {
+            callout("GOING ALONE!", { sub: `${state?.players.find((p) => p.id === e.pid)?.name ?? "Maker"} · ${SUIT_NAMES[e.suit]}`, tone: "gold", icon: "🦌" });
+            tvFx.centerBurst(["#ffbf5e", "#f0812f", "#fff6e6"], 40, "#ffbf5e");
+          }
           log.push(`${name(e.pid)} ${e.round === 1 ? "ordered up" : "named"} ${SUIT_NAMES[e.suit]}${e.alone ? ", going alone" : ""}`);
           break;
         case "pickup":
@@ -388,8 +393,17 @@ export function euchreTv(ctx: TvCtx): GameView {
           log.push(`${name(e.winner)} takes the trick for ${TEAM_EMOJI[e.team]}`);
           break;
         case "hand":
-          if (e.result.euchred) setTimeout(() => audio.loon(), 300);
-          else if (e.result.points >= 2) setTimeout(() => audio.fanfare(), 300);
+          if (e.result.euchred) {
+            setTimeout(() => audio.loon(), 300);
+            callout("EUCHRED!", { sub: `${TEAM_NAMES[e.result.team]} steal +2!`, tone: "danger", icon: "🪶", duration: 2200 });
+            tvFx.centerBurst(["#f0812f", "#ef6a4f", "#ffcf5c"], 48, "#ef6a4f");
+          } else if (e.result.tricks === 5) {
+            setTimeout(() => audio.fanfare(), 300);
+            callout(e.result.alone ? "ALONE & ALL 5!" : "A MARCH!", { sub: `${TEAM_NAMES[e.result.team]} +${e.result.points}`, tone: "gold", icon: "⭐", duration: 2200 });
+            tvFx.centerBurst(["#ffbf5e", "#4fb3e3", "#fff6e6"], 52, "#ffbf5e");
+          } else if (e.result.points >= 2) {
+            setTimeout(() => audio.fanfare(), 300);
+          }
           break;
         case "gameOver":
           setTimeout(() => audio.fanfare(), 1500);

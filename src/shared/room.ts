@@ -1,7 +1,7 @@
 // The room: who's here, who hosts, which game, and the running game's state.
 // Pure logic (no I/O) so it's unit-testable; the Durable Object wraps it.
 
-import { cleanAvatar, cleanName, fail, GameError, MAX_PLAYERS, publicMember, type EmoteId, type Member, type PublicMember, type Rng } from "./common";
+import { cleanAvatar, cleanName, fail, GameError, MAX_PLAYERS, publicMember, type CustomEmote, type EmoteInput, type Member, type PublicMember, type Rng } from "./common";
 import { GAMES, isGameId } from "./games";
 import type { ActionCtx, GameId } from "./games/types";
 
@@ -401,6 +401,7 @@ export function gameView(r: RoomState, pid: string | null) {
 // ---------- wire protocol ----------
 
 export type ClientMessage =
+  | { t: "hello" }
   | { t: "selectGame"; gameId: GameId }
   | { t: "settings"; gameId: GameId; settings: Record<string, unknown> }
   | { t: "audio"; audio: { tvMusic?: boolean; tvSounds?: boolean } }
@@ -412,7 +413,7 @@ export type ClientMessage =
   | { t: "leave" }
   | { t: "transferHost"; pid: string }
   | { t: "avatar"; avatar: string }
-  | { t: "emote"; emote: EmoteId }
+  | { t: "emote"; emote: EmoteInput }
   | { t: "skipTrack" }
   | { t: "game"; action: unknown };
 
@@ -423,14 +424,26 @@ export type ServerMessage =
       game: { id: GameId; pub: unknown; me: unknown } | null;
       events: Result;
     }
-  | { t: "emote"; pid: string; emote: EmoteId }
+  | { t: "emote"; pid: string; emote: CustomEmote }
   | { t: "skipTrack" }
   | { t: "error"; message: string }
   | { t: "fatal"; message: string };
 
+/** Mark a returning/active player as connected if they were previously flagged offline. */
+export function markActive(r: RoomState, pid: string): boolean {
+  const m = r.members.find((x) => x.id === pid);
+  if (!m || m.bot || m.connected) return false;
+  m.connected = true;
+  syncGame(r);
+  return true;
+}
+
 /** Apply a message from a player's phone. */
 export function handle(r: RoomState, pid: string, m: ClientMessage, rng: Rng): Result {
+  if (m?.t !== "leave") markActive(r, pid);
   switch (m?.t) {
+    case "hello":
+      return none();
     case "selectGame":
       return selectGame(r, pid, m.gameId);
     case "settings":

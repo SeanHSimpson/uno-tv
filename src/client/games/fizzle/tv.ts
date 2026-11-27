@@ -4,7 +4,8 @@
 import type { FizzleEvent, FizzlePublic } from "../../../shared/games/fizzle/engine";
 import { CARD_INFO } from "../../../shared/games/fizzle/engine";
 import { audio } from "../../audio";
-import { confetti } from "../../fx";
+import { callout, confetti } from "../../fx";
+import { tvFx } from "../../fxCanvas";
 import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
 import { fcardEl, fcardHtml, litCrackerSvg, litHtml } from "./common";
@@ -160,11 +161,18 @@ export function fizzleTv(ctx: TvCtx): GameView {
           bubble(e.pid, "Lit!", "bad");
           log.push(`${name(e.pid)} drew a firecracker! The fuse is lit`);
           break;
-        case "douse":
+        case "douse": {
           audio.splash();
           bubble(e.pid, "Phew!", "good");
+          const sr = seat(e.pid)?.getBoundingClientRect();
+          if (sr) {
+            tvFx.burst(sr.left + sr.width / 2, sr.top + sr.height / 2, ["#5cc8f2", "#bce8ff", "#fff6e6"], 32);
+            tvFx.shockwave(sr.left + sr.width / 2, sr.top + sr.height / 2, "#5cc8f2", 160);
+          }
+          callout("DOUSED!", { sub: state?.players.find((p) => p.id === e.pid)?.name, tone: "cool", icon: "💧", duration: 1400 });
           log.push(`${name(e.pid)} doused it. Back into the deck it goes`);
           break;
+        }
         case "toss": {
           audio.reverse();
           if (!quick) {
@@ -179,9 +187,16 @@ export function fizzleTv(ctx: TvCtx): GameView {
         case "shuffle":
           audio.shuffle();
           break;
-        case "boom":
+        case "boom": {
           audio.boom();
           bubble(e.pid, "💥 BOOM!", "bad");
+          const who = state?.players.find((p) => p.id === e.pid)?.name ?? "Someone";
+          callout("BOOM!", { sub: `${who} is out!`, tone: "danger", icon: "💥", duration: 2000 });
+          const sr = seat(e.pid)?.getBoundingClientRect();
+          if (sr) {
+            tvFx.burst(sr.left + sr.width / 2, sr.top + sr.height / 2, ["#ff5938", "#ff9b42", "#ffd166", "#fff6e6"], 64);
+            tvFx.shockwave(sr.left + sr.width / 2, sr.top + sr.height / 2, "#ff5938", 280);
+          } else tvFx.centerBurst(["#ff5938", "#ff9b42", "#ffd166"], 60, "#ff5938");
           log.push(`💥 ${name(e.pid)} went boom!`);
           if (!reducedMotion()) {
             $(".fizzle-tv").animate([{ translate: "0 0" }, { translate: "-14px 8px" }, { translate: "12px -8px" }, { translate: "-6px 4px" }, { translate: "0 0" }], { duration: 450 });
@@ -191,6 +206,7 @@ export function fizzleTv(ctx: TvCtx): GameView {
             setTimeout(() => flash.remove(), 700);
           }
           break;
+        }
         case "won":
           setTimeout(() => audio.fanfare(), 900);
           break;

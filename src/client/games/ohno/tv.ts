@@ -3,7 +3,8 @@
 import type { Card, Color, GameEvent, PublicPlayer, PublicState } from "../../../shared/games/ohno/types";
 import { audio } from "../../audio";
 import { cardBackSvg, cardEl, COLOR_NAMES, shapeSvg, shortLabel } from "../../cards";
-import { confetti } from "../../fx";
+import { callout, confetti } from "../../fx";
+import { tvFx } from "../../fxCanvas";
 import { icoCrown } from "../../icons";
 import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
@@ -269,11 +270,24 @@ export function ohnoTv(ctx: TvCtx): GameView {
             const to = topEl.getBoundingClientRect();
             topEl.style.visibility = "hidden";
             const r = ((e.card.id * 47) % 34) - 17;
-            fly(cardEl(e.card), from, to, { delay, spin: r - 40, duration: 560 }).then(() => {
+            fly(cardEl(e.card), from, to, { delay, spin: r - 40, duration: 560, flipFrom: cardEl(null) }).then(() => {
               topEl.style.visibility = "";
               topEl.classList.add("landed");
             });
-            if (e.card.color === "wild") colorBurst(e.color, delay + 520);
+            if (e.card.color === "wild") {
+              colorBurst(e.color, delay + 520);
+              const hex = { red: "#ef6a4f", yellow: "#f8c14a", green: "#62b36e", blue: "#5a98dd" }[e.color];
+              later(delay + 520, () => {
+                const cx = to.left + to.width / 2;
+                const cy = to.top + to.height / 2;
+                tvFx.burst(cx, cy, [hex, "#fff6e6", "#ffbf5e"], 36);
+                tvFx.shockwave(cx, cy, hex, 220);
+              });
+            }
+            if (e.card.value === "wild4" || (e.card.value === "draw2" && (state?.pendingDraw ?? 0) >= 4)) {
+              const stack = state?.pendingDraw ?? (e.card.value === "wild4" ? 4 : 2);
+              later(delay + 320, () => callout(`STACK +${stack}!`, { sub: names(e.pid), tone: "danger", icon: "🔥", duration: 1500 }));
+            }
           }
           delay += 380;
           break;
@@ -305,6 +319,7 @@ export function ohnoTv(ctx: TvCtx): GameView {
         case "swap":
           bubble(e.pid, "Swapped!", "good", delay);
           bubble(e.withPid, "Swapped!", "bad", delay);
+          later(delay, () => callout("HAND SWAP!", { sub: `${names(e.pid)} ⇄ ${names(e.withPid)}`, tone: "cool", icon: "🔀" }));
           delay += 300;
           break;
         case "rotate":
@@ -314,13 +329,20 @@ export function ohnoTv(ctx: TvCtx): GameView {
             easing: "ease-in-out",
           });
           if (state) for (const p of state.players) bubble(p.id, "Pass hands!", "good", delay);
+          later(delay, () => callout("PASS HANDS!", { sub: e.direction === 1 ? "Everyone clockwise ↻" : "Everyone counter-clockwise ↺", tone: "cool", icon: "🌀" }));
           delay += 350;
           break;
         case "ohno":
           bubble(e.pid, "OhNo!", "good", delay);
+          later(delay, () => {
+            callout("OHNO!", { sub: `${names(e.pid)} has 1 card left!`, tone: "gold", icon: "⚡", duration: 1500 });
+            const sr = seatRect(e.pid);
+            if (sr) tvFx.burst(sr.left + sr.width / 2, sr.top + sr.height / 2, ["#ffbf5e", "#fff6e6", "#ef6a4f"], 28);
+          });
           break;
         case "caught":
           bubble(e.pid, `Caught! +${e.count}`, "bad", delay);
+          later(delay, () => callout(`CAUGHT! +${e.count}`, { sub: `${names(e.by)} caught ${names(e.pid)}!`, tone: "danger", icon: "🫵" }));
           break;
         case "deal":
           dealAnimation();

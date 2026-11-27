@@ -57,30 +57,63 @@ export function asSet(cards: PCard[]): MeldShape | null {
  * but don't wrap around. Jokers fill gaps or extend the ends.
  */
 export function asRun(cards: PCard[]): MeldShape | null {
-  if (cards.length < 4) return null;
-  const nat = cards.filter((c) => !isJoker(c));
-  const jok = cards.filter(isJoker);
-  if (nat.length < 2 || jok.length > nat.length) return null;
-  if (nat.some((c) => c.suit !== nat[0]!.suit)) return null;
   const len = cards.length;
-  for (const aceHigh of [false, true]) {
-    const val = (c: PCard) => (c.rank === 1 && aceHigh ? 14 : c.rank);
-    const vals = nat.map(val);
-    if (new Set(vals).size !== vals.length) continue;
+  if (len < 4) return null;
+  const nat: PCard[] = [];
+  const jok: PCard[] = [];
+  let suit: Suit | null = null;
+  for (let i = 0; i < len; i++) {
+    const c = cards[i]!;
+    if (isJoker(c)) jok.push(c);
+    else {
+      if (suit === null) suit = c.suit;
+      else if (c.suit !== suit) return null;
+      nat.push(c);
+    }
+  }
+  if (nat.length < 2 || jok.length > nat.length) return null;
+  let hasAce = false;
+  for (let i = 0; i < nat.length; i++) if (nat[i]!.rank === 1) hasAce = true;
+  const modes = hasAce ? [false, true] : [false];
+  for (const aceHigh of modes) {
+    let min = 99;
+    let max = 0;
+    let dup = false;
+    let mask = 0;
+    for (let i = 0; i < nat.length; i++) {
+      const r = nat[i]!.rank;
+      const v = r === 1 && aceHigh ? 14 : r;
+      const bit = 1 << v;
+      if (mask & bit) {
+        dup = true;
+        break;
+      }
+      mask |= bit;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    if (dup) continue;
     const lo = aceHigh ? 2 : 1;
     const hi = aceHigh ? 14 : 13;
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
+    if (max - min + 1 > len) continue;
     // Prefer jokers above the real cards; slide down only if we'd run past the top.
-    for (let start = min; start >= lo; start--) {
-      const end = start + len - 1;
-      if (end > hi || end < max) continue;
-      const byVal = new Map(nat.map((c) => [val(c), c]));
-      const spare = [...jok];
-      const ordered: PCard[] = [];
-      for (let v = start; v <= end; v++) ordered.push(byVal.get(v) ?? spare.shift()!);
-      return { kind: "run", cards: ordered };
+    const start = Math.min(min, hi - len + 1);
+    if (start < lo || start + len - 1 < max) continue;
+    const end = start + len - 1;
+    const ordered: PCard[] = [];
+    let jIdx = 0;
+    for (let v = start; v <= end; v++) {
+      let found: PCard | undefined;
+      for (let i = 0; i < nat.length; i++) {
+        const c = nat[i]!;
+        if ((c.rank === 1 && aceHigh ? 14 : c.rank) === v) {
+          found = c;
+          break;
+        }
+      }
+      ordered.push(found ?? jok[jIdx++]!);
     }
+    return { kind: "run", cards: ordered };
   }
   return null;
 }
@@ -122,62 +155,104 @@ export function contractLabel(c: Contract): string {
  * the search, so duplicates (we play with two or three decks) can form parallel groups.
  */
 export function findContract(cards: PCard[], need: Contract, useAll: boolean): MeldShape[] | null {
+  const totalMelds = need.sets + need.runs;
+  if (totalMelds <= 0) return null;
+  if (cards.length < need.sets * 3 + need.runs * 4) return null;
+
   const jokers = cards.filter(isJoker);
   const nat = cards.filter((c) => !isJoker(c));
+  const maxJokers = jokers.length;
+  if (useAll && maxJokers > nat.length) return null;
+  if (nat.length < totalMelds * 2) return null;
 
   type Cand =
     | { kind: "set"; rank: number; naturals: number; jokers: number }
     | { kind: "run"; suit: Suit; values: number[]; aceHigh: boolean; jokers: number };
 
   const sets: Cand[] = [];
-  const rankCount = new Map<number, number>();
-  for (const c of nat) rankCount.set(c.rank, (rankCount.get(c.rank) ?? 0) + 1);
-  for (const [rank, n] of rankCount) {
-    if (n >= 3) sets.push({ kind: "set", rank, naturals: 3, jokers: 0 });
-    if (n >= 2) sets.push({ kind: "set", rank, naturals: 2, jokers: 1 });
-  }
-  const runs: Cand[] = [];
-  for (const suit of SUITS) {
-    for (const aceHigh of [false, true]) {
-      const present = new Set(nat.filter((c) => c.suit === suit).map((c) => (c.rank === 1 && aceHigh ? 14 : c.rank)));
-      for (let start = aceHigh ? 11 : 1; start <= (aceHigh ? 11 : 10); start++) {
-        const values: number[] = [];
-        for (let v = start; v < start + 4; v++) if (present.has(v)) values.push(v);
-        const missing = 4 - values.length;
-        if (values.length >= 2 && missing <= values.length) runs.push({ kind: "run", suit, values, aceHigh, jokers: missing });
-      }
+  if (need.sets > 0) {
+    const rankCount = new Map<number, number>();
+    for (const c of nat) rankCount.set(c.rank, (rankCount.get(c.rank) ?? 0) + 1);
+    for (const [rank, n] of rankCount) {
+      if (n >= 3) sets.push({ kind: "set", rank, naturals: 3, jokers: 0 });
+      if (n >= 2 && maxJokers >= 1) sets.push({ kind: "set", rank, naturals: 2, jokers: 1 });
     }
+    if (!sets.length) return null;
+    sets.sort((a, b) => a.jokers - b.jokers);
   }
 
-  /** Pick real, unused cards for a candidate (null if not enough copies are left). */
-  const allocate = (cand: Cand, used: Set<number>): PCard[] | null => {
-    const out: PCard[] = [];
+  const runs: Cand[] = [];
+  if (need.runs > 0) {
+    const seenRun = new Set<string>();
+    for (const suit of SUITS) {
+      const suited = nat.filter((c) => c.suit === suit);
+      if (suited.length < 2) continue;
+      const hasAce = suited.some((c) => c.rank === 1);
+      for (const aceHigh of hasAce ? [false, true] : [false]) {
+        const present = new Set(suited.map((c) => (c.rank === 1 && aceHigh ? 14 : c.rank)));
+        for (let start = aceHigh ? 11 : 1; start <= (aceHigh ? 11 : 10); start++) {
+          const values: number[] = [];
+          for (let v = start; v < start + 4; v++) if (present.has(v)) values.push(v);
+          const missing = 4 - values.length;
+          if (values.length >= 2 && missing <= values.length && missing <= maxJokers) {
+            // Multiple 4-card windows can contain the exact same subset of natural cards (e.g. 4♠ 6♠
+            // with 2 jokers); deduplicating keeps the search tree tiny on joker-heavy hands.
+            const key = `${suit}:${values.join(",")}`;
+            if (!seenRun.has(key)) {
+              seenRun.add(key);
+              runs.push({ kind: "run", suit, values, aceHigh, jokers: missing });
+            }
+          }
+        }
+      }
+    }
+    if (!runs.length) return null;
+    runs.sort((a, b) => a.jokers - b.jokers);
+  }
+
+  const used = new Uint8Array(nat.length);
+
+  /** Pick real, unused card indices for a candidate (null if not enough copies are left). */
+  const allocate = (cand: Cand): number[] | null => {
+    const idxs: number[] = [];
     const take = (ok: (c: PCard) => boolean) => {
-      const c = nat.find((x) => !used.has(x.id) && !out.includes(x) && ok(x));
-      if (c) out.push(c);
-      return !!c;
+      for (let idx = 0; idx < nat.length; idx++) {
+        if (used[idx]) continue;
+        if (idxs.includes(idx)) continue;
+        if (ok(nat[idx]!)) {
+          idxs.push(idx);
+          return true;
+        }
+      }
+      return false;
     };
     if (cand.kind === "set") {
       // Runs are picked first; prefer suits not in any chosen run so leftover cards can still extend them.
-      const runSuits = new Set(chosen.filter((c) => c.kind === "run").map((c) => c.cards[0]?.suit));
+      const runSuits = new Set<Suit>();
+      for (const ch of chosen) if (ch.kind === "run" && ch.cards[0]?.suit) runSuits.add(ch.cards[0].suit);
       for (let k = 0; k < cand.naturals; k++) {
-        if (!take((c) => c.rank === cand.rank && !runSuits.has(c.suit)) && !take((c) => c.rank === cand.rank)) return null;
+        if (!take((c) => c.rank === cand.rank && !runSuits.has(c.suit!)) && !take((c) => c.rank === cand.rank)) return null;
       }
     } else {
-      for (const v of cand.values) if (!take((c) => c.suit === cand.suit && (v === 14 ? c.rank === 1 : c.rank === v))) return null;
+      for (const v of cand.values) {
+        const targetRank = v === 14 ? 1 : v;
+        if (!take((c) => c.suit === cand.suit && c.rank === targetRank)) return null;
+      }
     }
-    return out;
+    return idxs;
   };
 
   // Pick runs before sets: runs need exact suits, while sets take any suit of that rank.
   const want: MeldKind[] = [...Array(need.runs).fill("run"), ...Array(need.sets).fill("set")];
   const chosen: { kind: MeldKind; cards: PCard[]; jokers: number }[] = [];
   let result: MeldShape[] | null = null;
+  let nodes = 0;
+  const MAX_NODES = 5000;
 
-  const pick = (i: number, used: Set<number>, usedJokers: number, minIdx: number) => {
-    if (result) return;
+  const pick = (i: number, usedJokers: number, minIdx: number) => {
+    if (result || ++nodes > MAX_NODES) return;
     if (i === want.length) {
-      result = build(used);
+      result = build();
       return;
     }
     const pool = want[i] === "set" ? sets : runs;
@@ -186,19 +261,19 @@ export function findContract(cards: PCard[], need: Contract, useAll: boolean): M
     const from = i > 0 && want[i - 1] === want[i] ? minIdx : 0;
     for (let k = from; k < pool.length; k++) {
       const cand = pool[k]!;
-      if (usedJokers + cand.jokers > jokers.length) continue;
-      const got = allocate(cand, used);
-      if (!got) continue;
-      chosen.push({ kind: cand.kind, cards: got, jokers: cand.jokers });
-      const next = new Set(used);
-      got.forEach((c) => next.add(c.id));
-      pick(i + 1, next, usedJokers + cand.jokers, k);
+      if (usedJokers + cand.jokers > maxJokers) continue;
+      const idxs = allocate(cand);
+      if (!idxs) continue;
+      for (const idx of idxs) used[idx] = 1;
+      chosen.push({ kind: cand.kind, cards: idxs.map((idx) => nat[idx]!), jokers: cand.jokers });
+      pick(i + 1, usedJokers + cand.jokers, k);
       chosen.pop();
-      if (result) return;
+      for (const idx of idxs) used[idx] = 0;
+      if (result || nodes > MAX_NODES) return;
     }
   };
 
-  const build = (used: Set<number>): MeldShape[] | null => {
+  const build = (): MeldShape[] | null => {
     const spare = [...jokers];
     const base: MeldShape[] = [];
     for (const c of chosen) {
@@ -207,33 +282,42 @@ export function findContract(cards: PCard[], need: Contract, useAll: boolean): M
       base.push(m);
     }
     if (!useAll) return base;
-    const leftovers = [...nat.filter((c) => !used.has(c.id)), ...spare];
+    const leftovers: PCard[] = [];
+    for (let idx = 0; idx < nat.length; idx++) if (!used[idx]) leftovers.push(nat[idx]!);
+    for (const j of spare) leftovers.push(j);
+    if (!leftovers.length) return base;
     // Every leftover card has to fit onto one of the melds. Try a couple of orders.
     const byValue = (a: PCard, b: PCard) => (a.rank || 99) - (b.rank || 99);
-    for (const order of [[...leftovers].sort(byValue), [...leftovers].sort(byValue).reverse()]) {
+    const asc = [...leftovers].sort(byValue);
+    const desc = [...asc].reverse();
+    for (const order of [asc, desc]) {
       const melds = base.map((m) => ({ ...m, cards: [...m.cards] }));
       let left = order;
       let progress = true;
       while (left.length && progress) {
         progress = false;
-        for (const card of [...left]) {
+        const nextLeft: PCard[] = [];
+        for (const card of left) {
+          let placed = false;
           for (let m = 0; m < melds.length; m++) {
             const grown = canAdd(melds[m]!, [card]);
             if (grown) {
               melds[m] = grown;
-              left = left.filter((x) => x !== card);
+              placed = true;
               progress = true;
               break;
             }
           }
+          if (!placed) nextLeft.push(card);
         }
+        left = nextLeft;
       }
       if (!left.length) return melds;
     }
     return null;
   };
 
-  pick(0, new Set(), 0, 0);
+  pick(0, 0, 0);
   return result;
 }
 

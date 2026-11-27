@@ -2,7 +2,8 @@
 
 import type { HushEvent, HushPublic } from "../../../shared/games/hush/engine";
 import { audio } from "../../audio";
-import { confetti } from "../../fx";
+import { callout, confetti } from "../../fx";
+import { tvFx } from "../../fxCanvas";
 import { icoBrokenHeart } from "../../icons";
 import { $, avatar, esc, fly, reducedMotion } from "../../ui";
 import type { GameSnap, GameView, TvCtx } from "../types";
@@ -192,10 +193,14 @@ export function hushTv(ctx: TvCtx): GameView {
           break;
         case "star":
           audio.reverse();
+          callout("STAR POWER!", { sub: "Everyone dropped their lowest card", tone: "cool", icon: "⭐" });
+          tvFx.centerBurst(["#ffcf5c", "#a5b4fc", "#fff6e6"], 44, "#ffcf5c");
           flash(`⭐ Star used! Everyone threw away their lowest card.<br><small>${e.discards.map((d) => `${nameOf(players, d.pid)}: ${d.card}`).join(" · ")}</small>`, "good", 3200);
           break;
         case "levelDone":
           audio.fanfare();
+          callout(`LEVEL ${e.level} CLEARED!`, { sub: e.reward === "star" ? "+1 Star earned" : e.reward === "heart" ? "+1 Heart earned" : "In perfect silence", tone: "good", icon: "✨" });
+          tvFx.centerBurst(["#ffcf5c", "#a5b4fc", "#6cc17a", "#fff6e6"], 48, "#a5b4fc");
           flash(`Level ${e.level} cleared! ✨${e.reward === "star" ? "<br><small>+1 ⭐ star</small>" : e.reward === "heart" ? "<br><small>+1 ❤️ heart</small>" : ""}`, "good", 2800);
           break;
         case "lost":

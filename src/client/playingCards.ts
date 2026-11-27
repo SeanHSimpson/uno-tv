@@ -172,7 +172,7 @@ export function pcardEl(card: PCard | null, extra = ""): HTMLDivElement {
   const el = document.createElement("div");
   el.className = `pcard ${card ? (card.rank === 0 ? "joker" : `s-${card.suit}`) : "back"} ${extra}`.trim();
   if (card) el.dataset.id = String(card.id);
-  el.innerHTML = card ? pcardSvg(card) : pcardBackSvg();
+  el.innerHTML = (card ? pcardSvg(card) : pcardBackSvg()) + (card?.rank === 0 ? `<span class="foil-sheen" aria-hidden="true"></span>` : "");
   return el;
 }
 

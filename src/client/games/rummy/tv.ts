@@ -2,7 +2,8 @@
 
 import type { RummyEvent, RummyPublic } from "../../../shared/games/rummy/engine";
 import { audio } from "../../audio";
-import { confetti } from "../../fx";
+import { callout, confetti } from "../../fx";
+import { tvFx } from "../../fxCanvas";
 import type { PCard } from "../../../shared/games/rummy/cards";
 import { pcardEl, pcardHtml, shortCard } from "../../playingCards";
 import { icoCrown } from "../../icons";
@@ -13,7 +14,13 @@ import type { GameSnap, GameView, TvCtx } from "../types";
 export function rummyTv(ctx: TvCtx): GameView {
   let alive = true;
   let state: RummyPublic | null = null;
+  let lastFitKey = "";
   const boardEls = new Map<string, HTMLElement>();
+  const onResize = () => {
+    lastFitKey = "";
+    if (state) fitBoards(state.table);
+  };
+  window.addEventListener("resize", onResize);
   ctx.el.innerHTML = `
   <div class="rummy-tv">
     <div class="rm-top">
@@ -146,8 +153,13 @@ export function rummyTv(ctx: TvCtx): GameView {
 
   /** The host picks the card size; if that many groups won't fit, shrink until they do. */
   function fitBoards(want: number) {
-    const root = ctx.el.querySelector<HTMLElement>(".rummy-tv")!;
-    const boards = $("#rm-boards");
+    const root = ctx.el.querySelector<HTMLElement>(".rummy-tv");
+    const boards = document.getElementById("rm-boards");
+    if (!root || !boards || !state) return;
+    const meldSig = state.melds.map((m) => `${m.id}:${m.cards.length}`).join(",");
+    const fitKey = `${want}|${state.players.length}|${meldSig}|${boards.clientWidth}x${boards.clientHeight}`;
+    if (fitKey === lastFitKey) return;
+    lastFitKey = fitKey;
     let ts = want || 1;
     root.style.setProperty("--ts", String(ts));
     while (ts > 0.7 && boards.scrollHeight > boards.clientHeight + 2) {
@@ -225,11 +237,16 @@ export function rummyTv(ctx: TvCtx): GameView {
   const handOf = (pid: string) => cardBox(boardOf(pid)?.querySelector(".rm-fan, .rm-down, .rm-head .avatar"), miniW());
   const stockBox = () => q("#rm-stock .pcard")?.getBoundingClientRect() ?? null;
 
-  /** Fly a card onto a card that's already drawn in place (hidden until it lands). */
-  function flyOnto(card: PCard | null, from: DOMRect | null, target: HTMLElement | null | undefined, delay: number, spin = 0, duration = 520) {
+  /** Fly a card onto a card that's already drawn in place (hidden until it lands), with optional 3D flip. */
+  function flyOnto(card: PCard | null, from: DOMRect | null, target: HTMLElement | null | undefined, delay: number, spin = 0, duration = 520, flip = false) {
     if (!from || !target) return;
     target.style.visibility = "hidden";
-    fly(pcardEl(card), from, target.getBoundingClientRect(), { delay, spin, duration }).then(() => (target.style.visibility = ""));
+    fly(pcardEl(card), from, target.getBoundingClientRect(), {
+      delay,
+      spin,
+      duration,
+      flipFrom: flip && card ? pcardEl(null) : undefined,
+    }).then(() => (target.style.visibility = ""));
   }
 
   /** A discard: the card slides from the player's hand across to the pile. Until it lands, the pile
@@ -292,8 +309,11 @@ export function rummyTv(ctx: TvCtx): GameView {
         const delay = at(leavesAt(i, step));
         if (to && delay > 0) dealTimers.push(setTimeout(() => alive && fly(pcardEl(null), from, to, { duration: DEAL_FLY, spin: (seat % 2 ? 1 : -1) * 20 }), delay));
       });
-      // The turned-up card flies face down and shows its face as it lands on the pile.
-      if (discard) dealTimers.push(setTimeout(() => alive && flyOnto(null, from, discard, 0, -12, TURN_UP_FLY), at(turnUpAt(seats, each))));
+      // The turned-up card flies from the deck and flips 3D back-to-face as it lands on the discard pile!
+      if (discard) {
+        const upCard = state?.discardTop ?? null;
+        dealTimers.push(setTimeout(() => alive && flyOnto(upCard, from, discard, 0, -12, TURN_UP_FLY, true), at(turnUpAt(seats, each))));
+      }
     };
     afterLayout(() => go(1));
   }
@@ -320,17 +340,26 @@ export function rummyTv(ctx: TvCtx): GameView {
         case "mayI":
           audio.tick();
           bubble(e.pid, "May I?", "good");
+          callout("MAY I?", { sub: state?.players.find((p) => p.id === e.pid)?.name, tone: "gold", icon: "🙋", duration: 1400 });
           break;
         case "bought":
           audio.pop();
           bubble(e.pid, `Got it! +1`, "good");
           log.push(`${names(e.pid)} bought the ${shortCard(e.card)} (+1 card)`);
           break;
-        case "down":
+        case "down": {
           audio.cardPlay("wild");
           bubble(e.pid, e.partial ? "Part down!" : "Down! ✓", "good");
+          const who = state?.players.find((p) => p.id === e.pid)?.name ?? "Someone";
+          callout(e.partial ? "PART DOWN!" : "CONTRACT DOWN!", { sub: who, tone: "good", icon: "✨" });
+          const br = boardOf(e.pid)?.getBoundingClientRect();
+          if (br) {
+            tvFx.burst(br.left + br.width / 2, br.top + br.height / 2, ["#ffbf5e", "#6cc17a", "#fff6e6"], 36);
+            tvFx.shockwave(br.left + br.width / 2, br.top + br.height / 2, "#6cc17a", 180);
+          }
           log.push(e.partial ? `${names(e.pid)} laid down part of their contract` : `${names(e.pid)} laid down their contract`);
           break;
+        }
         case "hit":
           audio.cardPlay("normal");
           log.push(`${names(e.pid)} added ${e.cards.map(shortCard).join(" ")} to a group`);
@@ -343,10 +372,14 @@ export function rummyTv(ctx: TvCtx): GameView {
           audio.shuffle();
           log.push("Reshuffled the discards into the deck");
           break;
-        case "out":
+        case "out": {
           setTimeout(() => audio.fanfare(), 400);
           bubble(e.pid, "Out! 🎉", "good");
+          const who = state?.players.find((p) => p.id === e.pid)?.name ?? "Someone";
+          callout("GOING OUT!", { sub: `${who} takes round ${e.round}`, tone: "gold", icon: "🏆", duration: 2100 });
+          tvFx.centerBurst(["#ffbf5e", "#6cc17a", "#fff6e6", "#ef6a4f"], 52, "#ffbf5e");
           break;
+        }
       }
     }
     if (log.length) $("#rm-log").innerHTML = log.slice(-3).join(" <span class='dot'>•</span> ");
@@ -403,7 +436,7 @@ export function rummyTv(ctx: TvCtx): GameView {
   }
 
   function flyFace(card: PCard, from: DOMRect | null, target: HTMLElement | null | undefined, delay: number, spin = 0) {
-    flyOnto(card, from, target, delay, spin);
+    flyOnto(card, from, target, delay, spin, 520, true);
   }
 
   return {
@@ -413,6 +446,7 @@ export function rummyTv(ctx: TvCtx): GameView {
     },
     destroy() {
       alive = false;
+      window.removeEventListener("resize", onResize);
       for (const t of dealTimers) clearTimeout(t);
       ctx.el.innerHTML = "";
     },

@@ -1,4 +1,4 @@
-import { reducedMotion } from "./ui";
+import { esc, reducedMotion } from "./ui";
 
 const COLORS = ["#ef6a4f", "#f8c14a", "#62b36e", "#5a98dd", "#fff6e6"];
 
@@ -26,4 +26,36 @@ export function confetti(host: HTMLElement, pieces = 120) {
     );
   }
   setTimeout(() => layer.remove(), 6000);
+}
+
+export type CalloutTone = "gold" | "danger" | "cool" | "good";
+
+let activeCallout: HTMLElement | null = null;
+let calloutTimer = 0;
+
+/**
+ * Bold theatrical TV moment banner (e.g. "CONTRACT DOWN!", "EUCHRED!", "STACK +4!").
+ * Never intercepts clicks and gracefully simplifies under reduced-motion.
+ */
+export function callout(title: string, opts: { sub?: string; tone?: CalloutTone; icon?: string; duration?: number } = {}) {
+  const { sub, tone = "gold", icon, duration = 1850 } = opts;
+  if (activeCallout) {
+    activeCallout.remove();
+    activeCallout = null;
+  }
+  clearTimeout(calloutTimer);
+  const el = document.createElement("div");
+  el.className = `tv-callout tone-${tone}`;
+  el.setAttribute("aria-live", "polite");
+  el.innerHTML = `<div class="tv-callout-card">
+    ${icon ? `<span class="tv-callout-ico">${esc(icon)}</span>` : ""}
+    <div class="tv-callout-title">${esc(title)}</div>
+    ${sub ? `<div class="tv-callout-sub">${esc(sub)}</div>` : ""}
+  </div>`;
+  document.body.append(el);
+  activeCallout = el;
+  calloutTimer = window.setTimeout(() => {
+    el.remove();
+    if (activeCallout === el) activeCallout = null;
+  }, duration);
 }

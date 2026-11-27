@@ -453,6 +453,10 @@
 #rm-lay.ready {
   animation: lay-ready-pulse 1.3s ease-in-out infinite;
 }
+#rm-discard.blocked {
+  opacity: 0.52;
+  filter: saturate(0.5);
+}
 @keyframes lay-ready-pulse {
   50% {
     box-shadow:

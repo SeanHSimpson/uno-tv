@@ -1290,24 +1290,26 @@ button.game-card:active {
 .emote-tray {
   display: flex;
   justify-content: center;
-  gap: 6px;
-  padding: 6px 12px 8px;
-  margin: 0 16px 6px;
+  gap: 5px;
+  padding: 6px 8px 8px;
+  margin: 0 12px 6px;
   border-radius: 16px;
-  background: rgba(16, 22, 19, 0.88);
+  background: rgba(16, 22, 19, 0.92);
   box-shadow:
     inset 0 0 0 1px rgba(255, 246, 230, 0.14),
     0 8px 22px rgba(0, 0, 0, 0.4);
   animation: fade-in 0.16s ease;
 }
 .emote-btn {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   display: grid;
   justify-items: center;
+  align-content: center;
   gap: 2px;
   border: 0;
   border-radius: 12px;
-  padding: 6px 4px;
+  padding: 6px 3px;
   background: rgba(255, 246, 230, 0.06);
   transition:
     transform 0.12s,
@@ -1318,72 +1320,217 @@ button.game-card:active {
   background: rgba(255, 191, 94, 0.22);
 }
 .emote-btn span {
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   line-height: 1;
 }
 .emote-btn small {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 800;
   color: var(--muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.emote-edit-btn {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  background: rgba(255, 191, 94, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 191, 94, 0.3);
+}
+.emote-edit-btn small {
+  color: var(--amber);
 }
 
-/* TV floating emote bubble over seats / lobby pills */
-.lobby-player,
-.hush-player {
-  position: relative;
+/* Reaction customizer sheet */
+.emote-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
-.emote-bubble {
-  position: absolute;
-  left: 50%;
-  top: -1.6vmin;
-  translate: -50% -100%;
-  z-index: 30;
+.emote-slot {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 8px 6px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 246, 230, 0.07);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 246, 230, 0.12);
+  color: var(--cream);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.emote-slot.on {
+  background: rgba(255, 191, 94, 0.2);
+  box-shadow: inset 0 0 0 2px var(--amber);
+}
+.emote-slot span {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+.emote-slot small {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.emote-preview {
+  display: grid;
+  place-items: center;
+  padding: 8px 0 4px;
+}
+.emote-preview-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.5vmin;
-  padding: 0.5vmin 1.4vmin;
+  gap: 6px;
+  padding: 6px 14px;
   border-radius: 999px;
   background: var(--cream);
   color: var(--ink);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 2.5vmin;
+  font-size: 1.15rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+.emote-preview-pill small {
+  font-size: 0.8em;
+}
+.emote-fields {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 10px;
+}
+.emote-field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+.emote-field input {
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255, 246, 230, 0.18);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--cream);
+  outline: none;
+  min-width: 0;
+}
+.emote-field-ico input {
+  text-align: center;
+  font-size: 1.25rem;
+}
+.emote-field input:focus {
+  border-color: var(--amber);
+}
+.emote-palette {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 5px;
+}
+.emote-pick {
+  border: 0;
+  border-radius: 10px;
+  padding: 6px 0;
+  font-size: 1.25rem;
+  line-height: 1;
+  background: rgba(255, 246, 230, 0.06);
+  transition: transform 0.1s, background 0.14s;
+}
+.emote-pick.on {
+  background: rgba(255, 191, 94, 0.28);
+  box-shadow: inset 0 0 0 1.5px var(--amber);
+}
+.emote-pick:active {
+  transform: scale(0.9);
+}
+.emote-sheet-acts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* TV floating emote bubble — fixed on document.body so overflow:hidden never clips it */
+.lobby-player,
+.hush-player {
+  position: relative;
+}
+.emote-bubble {
+  position: fixed;
+  z-index: 95;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65vmin;
+  padding: 0.7vmin 1.8vmin;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fffdf8, #f8ecd5);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2.9vmin;
   white-space: nowrap;
-  box-shadow: 0 1vmin 2.8vmin rgba(0, 0, 0, 0.48);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 0 0 0.25vmin rgba(255, 191, 94, 0.55),
+    0 1.2vmin 3.4vmin rgba(0, 0, 0, 0.55);
   pointer-events: none;
-  animation: emote-rise 2.2s cubic-bezier(0.2, 0.9, 0.25, 1) forwards;
+  animation: emote-rise 2.3s cubic-bezier(0.2, 0.9, 0.25, 1) forwards;
+}
+.emote-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -0.9vmin;
+  width: 1.6vmin;
+  height: 1.6vmin;
+  background: #f8ecd5;
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 0.25vmin;
+  z-index: -1;
+}
+.emote-bubble .em-ico {
+  font-size: 1.15em;
+  line-height: 1;
+}
+.emote-bubble.icon-only {
+  padding: 0.7vmin 1.5vmin;
+  font-size: 4vmin;
 }
 .emote-bubble small {
-  font-size: 0.72em;
+  font-size: 0.74em;
 }
 .emote-bubble.emote-float {
-  position: fixed;
-  top: auto;
-  bottom: 16vh;
-  translate: -50% 0;
+  left: 50%;
+  top: 78vh;
 }
 @keyframes emote-rise {
   0% {
     opacity: 0;
     scale: 0.4;
-    translate: -50% -60%;
+    translate: -50% -35%;
   }
   14% {
     opacity: 1;
-    scale: 1.08;
-    translate: -50% -110%;
+    scale: 1.1;
+    translate: -50% -105%;
   }
   24% {
     scale: 1;
   }
   78% {
     opacity: 1;
-    translate: -50% -135%;
+    translate: -50% -130%;
   }
   100% {
     opacity: 0;
     scale: 0.92;
-    translate: -50% -185%;
+    translate: -50% -180%;
   }
 }
 
@@ -1526,4 +1673,96 @@ button.game-card:active {
 }
 .rules-modal .rules-close {
   justify-self: center;
+}
+
+/* =====================================================================
+   TV AMBIENT 2D CANVAS & THEATRICAL MOMENT CALLOUTS (Path A + B)
+   ===================================================================== */
+.tv-fx-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 65;
+}
+.tv-callout {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 90;
+  padding: 4vmin;
+}
+.tv-callout-card {
+  --co-a: #ffd27a;
+  --co-b: #f39a32;
+  --co-ink: #251713;
+  display: grid;
+  justify-items: center;
+  gap: 0.4vmin;
+  padding: 2.2vmin 5.4vmin;
+  border-radius: 3vmin;
+  background: linear-gradient(180deg, var(--co-a), var(--co-b));
+  color: var(--co-ink);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    0 0 0 0.5vmin rgba(255, 246, 230, 0.85),
+    0 2.4vmin 6vmin rgba(0, 0, 0, 0.62);
+  text-align: center;
+  animation: callout-slam 1.85s cubic-bezier(0.18, 0.9, 0.25, 1) forwards;
+}
+.tv-callout.tone-danger .tv-callout-card {
+  --co-a: #ff7e66;
+  --co-b: #d93f2b;
+  --co-ink: #fffaf2;
+}
+.tv-callout.tone-good .tv-callout-card {
+  --co-a: #8be098;
+  --co-b: #43a358;
+  --co-ink: #122618;
+}
+.tv-callout.tone-cool .tv-callout-card {
+  --co-a: #8fd2ff;
+  --co-b: #3d85cc;
+  --co-ink: #102033;
+}
+.tv-callout-ico {
+  font-size: 5vmin;
+  line-height: 1;
+}
+.tv-callout-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 6.4vmin;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-shadow: 0 0.25vmin 0 rgba(0, 0, 0, 0.16);
+}
+.tv-callout-sub {
+  font-weight: 800;
+  font-size: 2.3vmin;
+  opacity: 0.88;
+}
+@keyframes callout-slam {
+  0% {
+    opacity: 0;
+    transform: scale(0.42) rotate(-7deg);
+  }
+  14% {
+    opacity: 1;
+    transform: scale(1.08) rotate(2deg);
+  }
+  24% {
+    transform: scale(1) rotate(-1.5deg);
+  }
+  78% {
+    opacity: 1;
+    transform: scale(1.01) rotate(-1.5deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.16) translateY(-3vmin) rotate(1deg);
+  }
 }

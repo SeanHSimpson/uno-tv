@@ -134,7 +134,7 @@ export function ecardEl(card: ECard | null, extra = ""): HTMLDivElement {
   const el = document.createElement("div");
   el.className = `pcard ecard ${card ? `s-${card.suit}` : "back"} ${extra}`.trim();
   if (card) el.dataset.id = String(card.id);
-  el.innerHTML = card ? ecardSvg(card) : ecardBackSvg();
+  el.innerHTML = (card ? ecardSvg(card) : ecardBackSvg()) + (card?.rank === 11 ? `<span class="foil-sheen" aria-hidden="true"></span>` : "");
   return el;
 }
 export const ecardHtml = (card: ECard | null, extra = "") => ecardEl(card, extra).outerHTML;

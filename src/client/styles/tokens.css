@@ -21,8 +21,10 @@
   --c-blue: #3f7fcf;
   --surface: rgba(14, 18, 16, 0.34);
   --surface-border: rgba(255, 246, 230, 0.14);
-  /* Ultra-lightweight pure-CSS subtle felt cross-grain (zero SVG filter CPU cost). */
-  --felt-weave: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.012) 0 2px, transparent 2px 6px);
+  /* Lightweight pure-CSS multi-layered woven baize & linen card grain (zero SVG filter CPU cost). */
+  --felt-weave:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.03) 0 1px, transparent 1px 5px);
   --radius: 18px;
   --font-display: "Fredoka", "Baloo 2", ui-rounded, system-ui, sans-serif;
   --font-ui: "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;

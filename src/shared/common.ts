@@ -11,6 +11,11 @@ export const MAX_PLAYERS = 10;
 export const MAX_NAME = 14;
 
 /** Quick table reactions players can send from their phone to pop over their TV seat. */
+export interface CustomEmote {
+  icon: string;
+  label: string;
+}
+
 export const EMOTES = [
   { id: "clap", icon: "👏", label: "Nice!" },
   { id: "gasp", icon: "😱", label: "Whoa!" },
@@ -20,7 +25,37 @@ export const EMOTES = [
   { id: "gg", icon: "🎉", label: "GG!" },
 ] as const;
 export type EmoteId = (typeof EMOTES)[number]["id"];
+export type EmoteInput = EmoteId | CustomEmote;
 export const isEmote = (x: unknown): x is EmoteId => EMOTES.some((e) => e.id === x);
+
+/** Curated icon palette for customizing phone reaction slots (any emoji typed via keyboard works too). */
+export const EMOTE_ICONS = [
+  "👏", "😱", "😂", "🔥", "😬", "🎉", "😭", "😈",
+  "👀", "💀", "🤯", "🫡", "🫶", "🍀", "🐢", "⚡",
+  "🍿", "💅", "🤡", "👑", "😎", "🫣", "🙏", "😤",
+  "🥳", "🤔", "🫠", "🚀", "💥", "🃏", "❤️", "👍",
+] as const;
+
+export const MAX_EMOTE_LABEL = 16;
+
+/** Sanitize either a built-in emote id or a custom { icon, label } reaction. */
+export function cleanEmote(raw: unknown): CustomEmote | null {
+  if (typeof raw === "string") {
+    const preset = EMOTES.find((e) => e.id === raw);
+    return preset ? { icon: preset.icon, label: preset.label } : null;
+  }
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as { icon?: unknown; label?: unknown };
+  const cleanStr = (v: unknown) =>
+    String(v ?? "")
+      .replace(/[\u0000-\u001f\u007f<>]/g, "")
+      .trim();
+  // Cap icon length cleanly (handles multi-codepoint emoji / ZWJ sequences without letting paragraphs through).
+  const icon = [...cleanStr(r.icon)].slice(0, 8).join("");
+  const label = [...cleanStr(r.label)].slice(0, MAX_EMOTE_LABEL).join("");
+  if (!icon && !label) return null;
+  return { icon: icon || "💬", label };
+}
 
 /** Pictures players can pick for their seat. */
 export const AVATARS = [

@@ -1,7 +1,7 @@
 // A player's phone: header, the lobby (game picker for the host), host menu, picture
 // picker, sound toggle, and whichever game is running.
 
-import { EMOTES, type EmoteId } from "../../shared/common";
+import { cleanEmote, EMOTE_ICONS, EMOTES, MAX_EMOTE_LABEL, type CustomEmote } from "../../shared/common";
 import { GAMES } from "../../shared/games";
 import type { GameId } from "../../shared/games/types";
 import type { ClientMessage, RoomPublic } from "../../shared/room";
@@ -27,17 +27,92 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
       <button class="icon-btn" id="ph-sound" aria-label="Phone sounds on/off">${icoSound(true, 19)}</button>
       <button class="icon-btn" id="ph-menu" aria-label="Host controls" hidden>${icoSettings(19)}</button>
     </header>
-    <div class="emote-tray" id="emote-tray" hidden>${EMOTES.map(
-      (em) => `<button class="emote-btn" data-emote="${em.id}" aria-label="${esc(em.label)}"><span>${em.icon}</span><small>${esc(em.label)}</small></button>`,
-    ).join("")}</div>
+    <div class="emote-tray" id="emote-tray" hidden></div>
     <div class="ph-game" id="ph-game"></div>
     <section class="ph-lobby overlay" id="ph-lobby" hidden></section>
     <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
     <section class="sheet" id="host-sheet" hidden></section>
     <section class="sheet" id="rules-sheet" hidden></section>
     <section class="sheet" id="avatar-sheet" hidden></section>
+    <section class="sheet" id="emote-sheet" hidden></section>
     <div class="conn-lost" id="conn-lost" hidden>Reconnecting…</div>
   </div>`;
+
+  // ---------- custom reactions ----------
+  const EMOTE_KEY = "ohno.emotes";
+  const defaultEmotes = (): CustomEmote[] => EMOTES.map((e) => ({ icon: e.icon, label: e.label }));
+  function loadEmotes(): CustomEmote[] {
+    try {
+      const raw = JSON.parse(localStorage.getItem(EMOTE_KEY) ?? "null");
+      if (Array.isArray(raw) && raw.length === EMOTES.length) {
+        const cleaned = raw.map((x) => cleanEmote(x));
+        if (cleaned.every(Boolean)) return cleaned as CustomEmote[];
+      }
+    } catch {
+      /* ignore corrupt storage */
+    }
+    return defaultEmotes();
+  }
+  function saveEmotes(list: CustomEmote[]) {
+    try {
+      localStorage.setItem(EMOTE_KEY, JSON.stringify(list));
+    } catch {
+      /* private mode */
+    }
+  }
+  let myEmotes: CustomEmote[] = loadEmotes();
+  let editSlot = 0;
+
+  function renderEmoteTray() {
+    $("#emote-tray").innerHTML = `${myEmotes
+      .map(
+        (em, i) =>
+          `<button class="emote-btn" data-emote-idx="${i}" aria-label="${esc(em.label || em.icon)}"><span>${esc(em.icon)}</span>${
+            em.label ? `<small>${esc(em.label)}</small>` : ""
+          }</button>`,
+      )
+      .join("")}<button class="emote-btn emote-edit-btn" data-act="editEmotes" aria-label="Customize reactions" title="Customize reactions"><span>✏️</span><small>Edit</small></button>`;
+  }
+  renderEmoteTray();
+
+  function renderEmoteEditor() {
+    const cur = myEmotes[editSlot] ?? myEmotes[0]!;
+    $("#emote-sheet").innerHTML = `
+      <h3>Customize reactions</h3>
+      <p class="muted small">Tap a slot to customize the emoji &amp; caption that pops on the TV.</p>
+      <div class="emote-slots">${myEmotes
+        .map(
+          (em, i) =>
+            `<button type="button" class="emote-slot ${i === editSlot ? "on" : ""}" data-eslot="${i}"><span>${esc(em.icon)}</span><small>${esc(em.label || "—")}</small></button>`,
+        )
+        .join("")}</div>
+      <div class="emote-preview"><span class="emote-preview-pill"><span>${esc(cur.icon)}</span>${cur.label ? `<small>${esc(cur.label)}</small>` : ""}</span></div>
+      <div class="emote-fields">
+        <label class="emote-field emote-field-ico"><span>Emoji</span><input id="em-ico-in" type="text" maxlength="8" value="${esc(cur.icon)}" aria-label="Reaction emoji" /></label>
+        <label class="emote-field emote-field-lbl"><span>Caption (optional)</span><input id="em-lbl-in" type="text" maxlength="${MAX_EMOTE_LABEL}" placeholder="e.g. MAY I?!" value="${esc(cur.label)}" aria-label="Reaction caption" /></label>
+      </div>
+      <div class="emote-palette">${EMOTE_ICONS.map(
+        (ico) => `<button type="button" class="emote-pick ${ico === cur.icon ? "on" : ""}" data-epick="${ico}">${ico}</button>`,
+      ).join("")}</div>
+      <div class="emote-sheet-acts">
+        <button type="button" class="btn btn-ghost" data-act="resetEmotes">Reset defaults</button>
+        <button type="button" class="btn btn-primary" data-close>Done</button>
+      </div>`;
+    const icoIn = $("#em-ico-in") as HTMLInputElement;
+    const lblIn = $("#em-lbl-in") as HTMLInputElement;
+    const syncPreview = () => {
+      const cleaned = cleanEmote({ icon: icoIn.value, label: lblIn.value }) ?? { icon: cur.icon, label: "" };
+      myEmotes[editSlot] = cleaned;
+      saveEmotes(myEmotes);
+      renderEmoteTray();
+      const slotEl = document.querySelector<HTMLElement>(`.emote-slot[data-eslot="${editSlot}"]`);
+      if (slotEl) slotEl.innerHTML = `<span>${esc(cleaned.icon)}</span><small>${esc(cleaned.label || "—")}</small>`;
+      const prev = document.querySelector<HTMLElement>(".emote-preview-pill");
+      if (prev) prev.innerHTML = `<span>${esc(cleaned.icon)}</span>${cleaned.label ? `<small>${esc(cleaned.label)}</small>` : ""}`;
+    };
+    icoIn.addEventListener("input", syncPreview);
+    lblIn.addEventListener("input", syncPreview);
+  }
 
   let room: RoomPublic | null = null;
   let lastGameSnap: GameSnap | null = null;
@@ -210,13 +285,35 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
     $("#ph-react").setAttribute("aria-expanded", String(!tray.hidden));
   });
   $("#emote-tray").addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-emote]");
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-emote-idx]");
     if (!btn) return;
-    send({ t: "emote", emote: btn.dataset.emote as EmoteId });
+    const em = myEmotes[Number(btn.dataset.emoteIdx)];
+    if (!em) return;
+    send({ t: "emote", emote: em });
     haptic("select");
     audio.tick();
     $("#emote-tray").hidden = true;
     $("#ph-react").setAttribute("aria-expanded", "false");
+  });
+  $("#emote-sheet").addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const slot = t.closest<HTMLElement>("[data-eslot]");
+    if (slot) {
+      editSlot = Number(slot.dataset.eslot);
+      haptic("select");
+      renderEmoteEditor();
+      return;
+    }
+    const pick = t.closest<HTMLElement>("[data-epick]");
+    if (pick) {
+      const ico = pick.dataset.epick!;
+      const cur = myEmotes[editSlot] ?? myEmotes[0]!;
+      myEmotes[editSlot] = { icon: ico, label: cur.label };
+      saveEmotes(myEmotes);
+      renderEmoteTray();
+      haptic("select");
+      renderEmoteEditor();
+    }
   });
   $("#sheet-backdrop").addEventListener("click", closeSheets);
   root.addEventListener("click", (e) => {
@@ -284,6 +381,20 @@ export function mountPhone(root: HTMLElement, code: string, name: string) {
         send({ t: "leave" });
         conn.close();
         location.href = "/";
+        break;
+      case "editEmotes":
+        $("#emote-tray").hidden = true;
+        $("#ph-react").setAttribute("aria-expanded", "false");
+        renderEmoteEditor();
+        openSheet($("#emote-sheet"));
+        break;
+      case "resetEmotes":
+        myEmotes = defaultEmotes();
+        saveEmotes(myEmotes);
+        renderEmoteTray();
+        renderEmoteEditor();
+        haptic("select");
+        toast("Reactions reset to defaults.");
         break;
       case "pickAvatar": {
         const mine = r.members.find((p) => p.id === pid)?.avatar ?? savedAvatar();

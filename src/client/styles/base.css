@@ -179,7 +179,7 @@
   aspect-ratio: 2 / 3;
   width: var(--cw, 90px);
   border-radius: 12% / 8%;
-  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.38));
   user-select: none;
   -webkit-user-select: none;
   flex: none;
@@ -188,6 +188,56 @@
   display: block;
   width: 100%;
   height: 100%;
+}
+/* Subtle metallic / holographic foil shimmer on Jokers, Wilds, and Euchre Bowers.
+   Mounted in a clipped child span so ::before/::after badges ("New", "Trump") never clip or collide. */
+.foil-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ecard .foil-sheen {
+  display: none;
+}
+.ecard.bower .foil-sheen {
+  display: block;
+}
+.foil-sheen::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(
+    115deg,
+    transparent 34%,
+    rgba(255, 236, 170, 0.06) 43%,
+    rgba(255, 245, 200, 0.34) 50%,
+    rgba(255, 215, 130, 0.08) 57%,
+    transparent 66%
+  );
+  transform: translateX(-70%);
+  animation: foil-sweep 4.2s ease-in-out infinite;
+}
+.card.c-wild .foil-sheen::before {
+  background: linear-gradient(
+    115deg,
+    transparent 32%,
+    rgba(255, 130, 110, 0.14) 43%,
+    rgba(255, 245, 190, 0.32) 50%,
+    rgba(130, 210, 255, 0.16) 57%,
+    transparent 68%
+  );
+}
+@keyframes foil-sweep {
+  0%,
+  22% {
+    transform: translateX(-70%);
+  }
+  52%,
+  100% {
+    transform: translateX(70%);
+  }
 }
 .card.mini {
   --cw: 100%;
@@ -204,6 +254,26 @@ body > .flyer {
   z-index: 1000;
   pointer-events: none;
   will-change: transform;
+}
+body > .flyer-3d {
+  perspective: 900px;
+}
+.flyer-flip {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+.flyer-face {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flyer-back {
+  transform: rotateY(180deg);
 }
 
 /* ---------- avatars & bots ---------- */
@@ -247,6 +317,19 @@ body > .flyer {
 .avatar.sm.emoji,
 .avatar.xs.emoji {
   font-size: 1.05em;
+}
+.avatar.art {
+  overflow: hidden;
+  padding: 2px;
+}
+.av-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.avatar-choice .av-svg {
+  width: 86%;
+  height: 86%;
 }
 .crown {
   display: inline-flex;

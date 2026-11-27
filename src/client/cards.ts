@@ -148,7 +148,7 @@ export function cardEl(card: Card | null, extraClass = ""): HTMLDivElement {
   const el = document.createElement("div");
   el.className = `card ${card ? `c-${card.color}` : "back"} ${extraClass}`.trim();
   if (card) el.dataset.id = String(card.id);
-  el.innerHTML = card ? cardSvg(card) : cardBackSvg();
+  el.innerHTML = (card ? cardSvg(card) : cardBackSvg()) + (card?.color === "wild" ? `<span class="foil-sheen" aria-hidden="true"></span>` : "");
   return el;
 }
 

@@ -9,6 +9,41 @@
 
 import { layoutPiles, type PileAlign, type PileStyle } from "./handPiles";
 import { icoFan, icoGrid } from "./icons";
+import { reducedMotion } from "./ui";
+
+/** Capture card positions before a sort/layout change for smooth FLIP glide animations. */
+export function captureCardRects(box: HTMLElement, selector = ".pcard"): Map<string, DOMRect> {
+  const map = new Map<string, DOMRect>();
+  if (reducedMotion()) return map;
+  for (const el of box.querySelectorAll<HTMLElement>(`:scope > ${selector}`)) {
+    if (el.dataset.id && !el.classList.contains("reorder-drag") && !el.classList.contains("dragging")) {
+      map.set(el.dataset.id, el.getBoundingClientRect());
+    }
+  }
+  return map;
+}
+
+/** Smoothly glide cards from their captured positions into their new layout slots. */
+export function animateCardFlip(box: HTMLElement, before: Map<string, DOMRect>, selector = ".pcard") {
+  if (!before.size || reducedMotion()) return;
+  for (const el of box.querySelectorAll<HTMLElement>(`:scope > ${selector}`)) {
+    const id = el.dataset.id;
+    if (!id || el.classList.contains("reorder-drag") || el.classList.contains("dragging") || el.classList.contains("deal-wait")) continue;
+    const prev = before.get(id);
+    if (!prev) continue;
+    const next = el.getBoundingClientRect();
+    const dx = prev.left - next.left;
+    const dy = prev.top - next.top;
+    if (Math.abs(dx) < 2 && Math.abs(dy) < 2) continue;
+    el.animate(
+      [
+        { translate: `${dx}px ${dy}px` },
+        { translate: "0px 0px" },
+      ],
+      { duration: 260, easing: "cubic-bezier(0.2, 0.85, 0.25, 1)" },
+    );
+  }
+}
 
 type Card = { id: number };
 export type SortMode = "rank" | "suit" | "rows" | "free";
@@ -217,6 +252,8 @@ export function rowsLayout<C extends Card>(cards: C[], rowsOf: (c: C) => { row: 
   return { out, matrix };
 }
 
+const fitCache = new WeakMap<HTMLElement, string>();
+
 /**
  * Size the cards so the whole hand fits without scrolling.
  * Grid: rows and columns. Fan: one or two overlapping, slightly curved rows.
@@ -232,16 +269,30 @@ export function fitHand(
   const cards = [...box.querySelectorAll<HTMLElement>(":scope > .pcard")];
   const n = Math.max(1, cards.length);
   const cs = getComputedStyle(box);
-  const W = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8;
-  const H = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 16;
+  const padL = parseFloat(cs.paddingLeft);
+  const padT = parseFloat(cs.paddingTop);
+  const W = box.clientWidth - padL - parseFloat(cs.paddingRight) - 8;
+  const H = box.clientHeight - padT - parseFloat(cs.paddingBottom) - 16;
+  const key = [
+    Math.round(W),
+    Math.round(H),
+    maxCw,
+    arr.mode,
+    layout,
+    cards.map((el) => el.dataset.id).join(","),
+    piles ? `${piles.style}:${piles.align}:${piles.groups.map((g) => g.join(".")).join("/")}` : "",
+    matrix ? `${matrix.rows}x${matrix.cols}` : "",
+  ].join("|");
+  if (fitCache.get(box) === key) return;
+  fitCache.set(box, key);
   box.classList.toggle("fan", layout === "fan" && !matrix && !piles);
   box.classList.toggle("rows", !!matrix && !piles);
   box.classList.toggle("placed", !!piles);
   if (piles) {
     // Grouped: every card absolutely placed (see handPiles.ts).
     const spots = layoutPiles(piles.groups, piles.style, { W, H }, maxCw, piles.align);
-    const left = parseFloat(cs.paddingLeft) + 4;
-    const top = parseFloat(cs.paddingTop) + 8;
+    const left = padL + 4;
+    const top = padT + 8;
     for (const el of cards) {
       for (const v of ["--k", "--rot", "--dip"]) el.style.removeProperty(v);
       el.style.gridArea = "";

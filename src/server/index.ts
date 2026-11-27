@@ -1,11 +1,12 @@
 import { getServerByName, routePartykitRequest, Server, type Connection, type ConnectionContext } from "partyserver";
-import { GameError, isEmote } from "../shared/common";
+import { cleanEmote, GameError } from "../shared/common";
 import * as R from "../shared/room";
 
 type ConnState = { role: "tv" } | { role: "player"; pid: string };
 
 const ROOM_ALPHABET = "BCDFGHJKLMNPQRSTVWXZ"; // consonants only: no accidental words, no 0/O 1/I mixups
 const ROOM_TTL_MS = 6 * 60 * 60 * 1000; // rooms are cleaned up after 6 idle hours
+const ALARM_REFRESH_MS = 15 * 60 * 1000; // no need to hit setAlarm on every single card play
 const STORAGE_KEY = "room";
 const DISCONNECT_GRACE_MS = 8_000;
 
@@ -65,12 +66,21 @@ export class Room extends Server<Env> {
       return;
     }
     conn.setState({ role: "player", pid });
+    this.lastActive.set(pid, Date.now());
     try {
       await this.commit(R.join(this.room, pid, url.searchParams.get("name"), url.searchParams.get("avatar"), Math.random));
     } catch (err) {
       this.send(conn, { t: "fatal", message: err instanceof GameError ? err.message : "Couldn't join that room." });
       conn.close(4403, "rejected");
     }
+  }
+
+  private tvConnections() {
+    const out: Connection<ConnState>[] = [];
+    for (const c of this.getConnections<ConnState>()) {
+      if (c.state?.role === "tv") out.push(c);
+    }
+    return out;
   }
 
   async onMessage(conn: Connection<ConnState>, raw: string | ArrayBuffer | ArrayBufferView) {
@@ -92,17 +102,26 @@ export class Room extends Server<Env> {
         else if (msg?.t === "game") res = R.tvAction(r, msg.action, Math.random);
         else return;
       } else {
+        this.lastActive.set(st.pid, Date.now());
+        if (msg?.t === "hello") {
+          // Returning from background on a still-open socket: restore online state if it had flipped.
+          if (R.markActive(r, st.pid)) await this.commit({ room: [], game: [] });
+          else this.sync({ room: [], game: [] }, conn);
+          return;
+        }
         if (msg?.t === "emote") {
-          if (!isEmote(msg.emote)) return;
+          const emote = cleanEmote(msg.emote);
+          if (!emote) return;
           const now = Date.now();
           if (now - (this.lastEmote.get(st.pid) ?? 0) < 1200) return;
           this.lastEmote.set(st.pid, now);
-          for (const tv of this.getConnections<ConnState>("tv")) this.send(tv, { t: "emote", pid: st.pid, emote: msg.emote });
+          if (R.markActive(r, st.pid)) await this.commit({ room: [], game: [] });
+          for (const tv of this.tvConnections()) this.send(tv, { t: "emote", pid: st.pid, emote });
           return;
         }
         if (msg?.t === "skipTrack") {
           if (r.hostId !== st.pid) return this.send(conn, { t: "error", message: "Only the host can do that." });
-          for (const tv of this.getConnections<ConnState>("tv")) this.send(tv, { t: "skipTrack" });
+          for (const tv of this.tvConnections()) this.send(tv, { t: "skipTrack" });
           return;
         }
         res = R.handle(r, st.pid, msg, Math.random);
@@ -125,7 +144,7 @@ export class Room extends Server<Env> {
 
   private disconnectKicked(pid: string) {
     if (this.room?.members.some((m) => m.id === pid)) return; // kick was refused
-    for (const c of this.getConnections<ConnState>("player")) {
+    for (const c of this.getConnections<ConnState>()) {
       if (c.state?.role === "player" && c.state.pid === pid) {
         this.send(c, { t: "fatal", message: "The host removed you from the table." });
         c.close(4001, "kicked");
@@ -140,15 +159,18 @@ export class Room extends Server<Env> {
     // seconds to come back before the TV greys out their seat. The pending timer keeps the
     // room awake just long enough to check.
     const pid = st.pid;
+    const closedAt = Date.now();
     await new Promise((r) => setTimeout(r, DISCONNECT_GRACE_MS));
-    if (!this.room || this.isOnline(pid, conn.id)) return;
+    if (!this.room || (this.lastActive.get(pid) ?? 0) > closedAt || this.isOnline(pid, conn.id)) return;
     await this.commit(R.setConnected(this.room, pid, false, Math.random));
   }
 
   /** Is this player connected on any other socket (another tab, or a reconnect)? */
   private isOnline(pid: string, exceptId?: string) {
-    for (const c of this.getConnections<ConnState>("player")) {
-      if (c.id !== exceptId && c.state?.role === "player" && c.state.pid === pid && c.readyState === WebSocket.OPEN) return true;
+    for (const c of this.getConnections<ConnState>()) {
+      if (c.id !== exceptId && c.state?.role === "player" && c.state.pid === pid) {
+        if (c.readyState === WebSocket.OPEN || c.readyState === 1) return true;
+      }
     }
     return false;
   }
@@ -157,16 +179,24 @@ export class Room extends Server<Env> {
     // Idle cleanup: if nobody's here, forget the room.
     const anyone = [...this.getConnections()].length > 0;
     if (anyone) {
-      await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS);
+      this.lastAlarmAt = Date.now();
+      await this.ctx.storage.setAlarm(this.lastAlarmAt + ROOM_TTL_MS);
       return;
     }
     this.room = null;
     await this.ctx.storage.deleteAll();
   }
 
+  private lastAlarmAt = 0;
+
   private async save() {
-    await this.ctx.storage.put(STORAGE_KEY, this.room);
-    await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS);
+    const now = Date.now();
+    if (now - this.lastAlarmAt >= ALARM_REFRESH_MS) {
+      this.lastAlarmAt = now;
+      await Promise.all([this.ctx.storage.put(STORAGE_KEY, this.room), this.ctx.storage.setAlarm(now + ROOM_TTL_MS)]);
+    } else {
+      await this.ctx.storage.put(STORAGE_KEY, this.room);
+    }
   }
 
   private async commit(res: R.Result) {
@@ -186,6 +216,7 @@ export class Room extends Server<Env> {
   private botTimer: ReturnType<typeof setTimeout> | null = null;
   private turnTimer: ReturnType<typeof setTimeout> | null = null;
   private lastEmote = new Map<string, number>();
+  private lastActive = new Map<string, number>();
 
   private scheduleTurnTimer() {
     if (this.turnTimer) clearTimeout(this.turnTimer);
