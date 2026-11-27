@@ -16,6 +16,7 @@ export function ohnoTv(ctx: TvCtx): GameView {
   <div class="ohno-tv">
     <main class="table-wrap" id="table-wrap">
       <div class="felt">
+        <div class="table-spot" id="oh-spot" aria-hidden="true"></div>
         <svg class="ring" id="ring" viewBox="-100 -100 200 200" aria-hidden="true">
           <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="currentColor"/></marker></defs>
           <g class="ring-flip"><g class="ring-spin">${[0, 1, 2, 3]
@@ -73,6 +74,18 @@ export function ohnoTv(ctx: TvCtx): GameView {
     $("#ring").classList.toggle("hidden", s.phase !== "playing");
 
     renderSeats(s);
+    const spot = document.getElementById("oh-spot");
+    if (spot) {
+      const idx = s.turnId ? s.players.findIndex((x) => x.id === s.turnId) : -1;
+      if (idx >= 0 && s.players.length > 0) {
+        const a = ((90 + (idx * 360) / s.players.length) * Math.PI) / 180;
+        spot.style.setProperty("--sx", `${(Math.cos(a) * 24).toFixed(1)}%`);
+        spot.style.setProperty("--sy", `${(Math.sin(a) * 24).toFixed(1)}%`);
+      } else {
+        spot.style.setProperty("--sx", "0%");
+        spot.style.setProperty("--sy", "-6%");
+      }
+    }
 
     if (s.phase === "playing" && s.turnId) {
       const p = s.players.find((x) => x.id === s.turnId)!;

@@ -50,6 +50,7 @@ export function euchreTv(ctx: TvCtx): GameView {
     <header class="eu-scores" id="eu-scores"></header>
     <div class="eu-table">
       <div class="eu-felt">
+        <div class="table-spot" id="eu-spot" aria-hidden="true"></div>
         ${MITTEN}
         <div class="eu-center" id="eu-center"></div>
         <div class="eu-trick" id="eu-trick"></div>
@@ -121,6 +122,13 @@ export function euchreTv(ctx: TvCtx): GameView {
     renderScores(s);
     renderCenter(s);
     renderSeats(s);
+    const spot = document.getElementById("eu-spot");
+    if (spot) {
+      const idx = s.turnId ? seatIndex(s.turnId) : -1;
+      const dir = idx >= 0 ? DIR[POS[idx]!] : [0, -0.3];
+      spot.style.setProperty("--sx", `${(dir[0] * 24).toFixed(1)}%`);
+      spot.style.setProperty("--sy", `${(dir[1] * 24).toFixed(1)}%`);
+    }
     renderTrick(s, prev);
     const cur = s.players.find((p) => p.id === s.turnId);
     if (cur) {

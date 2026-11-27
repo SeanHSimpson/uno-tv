@@ -16,6 +16,7 @@ export function fizzleTv(ctx: TvCtx): GameView {
   const seatEls = new Map<string, HTMLElement>();
   ctx.el.innerHTML = `
   <div class="fizzle-tv">
+    <div class="table-spot" id="fz-spot" aria-hidden="true"></div>
     <div class="fz-center">
       <div class="fz-deck" id="fz-deck"></div>
       <div class="fz-discard" id="fz-discard"></div>
@@ -73,6 +74,16 @@ export function fizzleTv(ctx: TvCtx): GameView {
       const p = s.players.find((x) => x.id === s.turnId)!;
       const lit = p.lit.length ? ` <span class="tag-pending">🧨 must toss or douse it!</span>` : "";
       $("#fz-turn").innerHTML = `${avatar(p, "sm")} <b>${esc(p.name)}</b>'s turn${lit}${p.connected ? "" : ` <span class="tag-off">(phone disconnected)</span>`}`;
+      const spot = document.getElementById("fz-spot");
+      const seatEl = seat(s.turnId);
+      if (spot && seatEl) {
+        const sr = spot.getBoundingClientRect();
+        const br = seatEl.getBoundingClientRect();
+        if (sr.width > 10 && sr.height > 10) {
+          spot.style.setProperty("--sx", `${(((br.left + br.width / 2 - (sr.left + sr.width / 2)) / sr.width) * 38).toFixed(1)}%`);
+          spot.style.setProperty("--sy", `${(((br.top + br.height / 2 - (sr.top + sr.height / 2)) / sr.height) * 38).toFixed(1)}%`);
+        }
+      }
     }
     renderResults(s);
   }

@@ -42,32 +42,52 @@
   display: grid;
   grid-template-rows: 1fr auto auto;
   gap: 2vmin;
-  padding: 1vmin 3vmin 0;
+  padding: 2.2vmin 4.2vmin 1.2vmin;
   min-height: 0;
   position: relative;
 }
 .fizzle-tv::before {
-  /* Warm ember-lit tabletop framing */
+  /* Sculpted dark walnut workbench table frame */
   content: "";
   position: absolute;
-  inset: 0.4vmin 2vmin 1.4vmin;
-  border-radius: 3.4vmin;
+  inset: 0.4vmin 1.8vmin 1.2vmin;
+  border-radius: 4.2vmin;
+  border: 0.3vmin solid rgba(255, 190, 130, 0.2);
   background:
-    var(--felt-weave),
-    radial-gradient(ellipse 65% 50% at 50% 38%, rgba(240, 120, 62, 0.14), transparent 65%),
-    radial-gradient(ellipse at 50% 45%, #342126 0%, #23161a 56%, #170e11 100%);
+    linear-gradient(155deg, rgba(255, 195, 135, 0.2) 0%, transparent 35%, rgba(0, 0, 0, 0.58) 100%),
+    url("/textures/wood-walnut.webp") center / 340px 340px repeat;
   box-shadow:
-    inset 0 0 0 0.3vmin rgba(255, 191, 94, 0.14),
-    inset 0 0 7vmin rgba(0, 0, 0, 0.58),
-    0 0 0 0.9vmin var(--wood-2),
-    0 0 0 1.45vmin var(--wood-1),
-    0 0 0 1.75vmin #362014,
-    0 2.5vmin 6vmin rgba(0, 0, 0, 0.55);
+    inset 0 0.25vmin 0.3vmin rgba(255, 210, 160, 0.22),
+    0 0 0 0.55vmin #24130d,
+    0 2.8vmin 7vmin rgba(0, 0, 0, 0.72);
   z-index: 0;
   pointer-events: none;
 }
-.fizzle-tv > :not(.overlay):not(.fz-flash) {
+.fizzle-tv::after {
+  /* Recessed dark ember wool baize playing surface */
+  content: "";
+  position: absolute;
+  inset: 2.3vmin 3.7vmin 3.1vmin;
+  border-radius: 2.6vmin;
+  background:
+    radial-gradient(ellipse 68% 54% at 50% 38%, rgba(245, 120, 62, 0.18), transparent 66%),
+    radial-gradient(ellipse 100% 96% at 50% 50%, transparent 42%, rgba(12, 6, 8, 0.68) 100%),
+    url("/textures/felt-ember.webp") center / 280px 280px repeat;
+  box-shadow:
+    inset 0 0.7vmin 2.4vmin rgba(0, 0, 0, 0.78),
+    inset 0 0 7.5vmin rgba(0, 0, 0, 0.56),
+    inset 0 0 0 0.22vmin rgba(255, 168, 92, 0.28),
+    0 0 0 0.38vmin rgba(16, 8, 6, 0.88);
+  z-index: 0;
+  pointer-events: none;
+}
+.fizzle-tv > :not(.overlay):not(.fz-flash):not(.table-spot) {
   position: relative;
+  z-index: 2;
+}
+.fizzle-tv .table-spot {
+  inset: 2.3vmin 3.7vmin 3.1vmin;
+  border-radius: 2.6vmin;
   z-index: 1;
 }
 .fz-center {
@@ -106,6 +126,7 @@
 .fz-deck-stack .fcard {
   position: relative;
   z-index: 2;
+  filter: drop-shadow(0 0.35vmin 0.5vmin rgba(0, 0, 0, 0.58)) drop-shadow(0 1.2vmin 2vmin rgba(0, 0, 0, 0.42));
 }
 .fz-big {
   --cw: 19vmin;

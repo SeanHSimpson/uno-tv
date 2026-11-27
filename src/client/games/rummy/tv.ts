@@ -23,6 +23,7 @@ export function rummyTv(ctx: TvCtx): GameView {
   window.addEventListener("resize", onResize);
   ctx.el.innerHTML = `
   <div class="rummy-tv">
+    <div class="table-spot" id="rm-spot" aria-hidden="true"></div>
     <div class="rm-top">
       <div class="rm-contract" id="rm-contract"></div>
       <div class="rm-piles">
@@ -113,6 +114,7 @@ export function rummyTv(ctx: TvCtx): GameView {
       }
     });
     fitBoards(s.table);
+    aimSpotlight(s.turnId);
 
     if (s.phase === "playing" && s.turnId) {
       const p = s.players.find((x) => x.id === s.turnId)!;
@@ -149,6 +151,24 @@ export function rummyTv(ctx: TvCtx): GameView {
         delete (b?.firstElementChild as HTMLElement | null)?.dataset.html;
       }
     });
+  }
+
+  function aimSpotlight(turnId: string | null) {
+    const spot = document.getElementById("rm-spot");
+    const board = turnId ? boardOf(turnId) : null;
+    if (!spot) return;
+    if (!board) {
+      spot.style.setProperty("--sx", "0%");
+      spot.style.setProperty("--sy", "-6%");
+      return;
+    }
+    const sr = spot.getBoundingClientRect();
+    const br = board.getBoundingClientRect();
+    if (sr.width < 10 || sr.height < 10) return;
+    const dx = ((br.left + br.width / 2 - (sr.left + sr.width / 2)) / sr.width) * 42;
+    const dy = ((br.top + br.height / 2 - (sr.top + sr.height / 2)) / sr.height) * 42;
+    spot.style.setProperty("--sx", `${dx.toFixed(1)}%`);
+    spot.style.setProperty("--sy", `${dy.toFixed(1)}%`);
   }
 
   /** The host picks the card size; if that many groups won't fit, shrink until they do. */
